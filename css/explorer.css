@@ -1,0 +1,612 @@
+/**
+ * explorer.css
+ * Dark-slate scientific interface styled after H9_FOV_Physiology_Atlas_Viewer.html.
+ * Combines clean Arial / system sans-serif UI typography with JetBrains Mono / Consolas
+ * monospace readouts for stoichiometry coordinates, Hill equations, and quantitative tables.
+ */
+
+:root {
+  --bg: #0b0f19;
+  --panel: #131b2e;
+  --panel-alt: #1b253d;
+  --panel-deep: #101829;
+  --border: #2a3655;
+  --border-light: #3b4c73;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-dark: #0284c7;
+  --purple: #a855f7;
+  --purple-light: #c084fc;
+
+  /* Family Accent Colors (matching H9 Atlas lineage pill style) */
+  --fam-wt-upr: #3b82f6;
+  --fam-wt-inv: #ef4444;
+  --fam-r70a-upr: #a855f7;
+  --fam-r70a-inv: #f59e0b;
+  --fam-tamut: #10b981;
+
+  /* Quadrant Colors */
+  --q1-color: #f87171;
+  --q2-color: #fb923c;
+  --q3-color: #60a5fa;
+  --q4-color: #34d399;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Sticky Top Header (matching H9_FOV_Physiology_Atlas_Viewer.html) */
+header {
+  background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 22px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+
+.title-block h1 {
+  margin: 0;
+  font-size: 17.5px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.title-block p {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mode-btn {
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  transition: all 0.12s ease;
+}
+
+.mode-btn:hover {
+  border-color: var(--accent);
+}
+
+.mode-btn.active {
+  background: var(--accent-dark);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+/* Control Bars (Row 1: Circuit/Data Controls, Row 2: Focus/Zoom View) */
+.controls-bar {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.focus-bar {
+  background: var(--panel-deep);
+  border-bottom: 1px solid var(--border);
+  padding: 9px 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.ctrl-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.ctrl-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 4px;
+  letter-spacing: 0.03em;
+}
+
+.pill-btn {
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  transition: all 0.12s ease;
+}
+
+.pill-btn:hover {
+  border-color: var(--accent);
+}
+
+.pill-btn.active {
+  background: var(--accent);
+  color: #0f172a;
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.pill-btn.focus-special.active {
+  background: var(--purple);
+  color: #ffffff;
+  border-color: var(--purple-light);
+}
+
+.pill-btn.fam-wt-upr.active {
+  background: var(--fam-wt-upr);
+  color: #ffffff;
+  border-color: #60a5fa;
+}
+
+.pill-btn.fam-wt-inv.active {
+  background: var(--fam-wt-inv);
+  color: #ffffff;
+  border-color: #f87171;
+}
+
+.pill-btn.fam-r70a-upr.active {
+  background: var(--fam-r70a-upr);
+  color: #ffffff;
+  border-color: #c084fc;
+}
+
+.pill-btn.fam-r70a-inv.active {
+  background: var(--fam-r70a-inv);
+  color: #0f172a;
+  border-color: #fbbf24;
+}
+
+.pill-btn.fam-tamut.active {
+  background: var(--fam-tamut);
+  color: #0f172a;
+  border-color: #34d399;
+}
+
+select.dark-select {
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 5px 9px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+select.dark-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.kb-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px 9px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+}
+
+/* Main Content Container */
+main {
+  padding: 16px 22px 44px 22px;
+  max-width: 1920px;
+  margin: 0 auto;
+}
+
+/* 8-Card Metrics Strip (matching H9_FOV_Physiology_Atlas_Viewer.html) */
+.metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.metric-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.metric-card .m-label {
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.metric-card .m-val {
+  font-size: 17px;
+  font-weight: 700;
+  margin-top: 2px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+.metric-card .m-sub {
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-family: var(--font-mono);
+}
+
+/* Primary Dark Cards (matching .fov-card in H9 Atlas) */
+.fov-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+.fov-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+/* Badges */
+.badge {
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 11.5px;
+  display: inline-block;
+  font-family: var(--font-mono);
+}
+
+.badge-wt-upr {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid #3b82f6;
+}
+
+.badge-wt-inv {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid #ef4444;
+}
+
+.badge-r70a-upr {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid #a855f7;
+}
+
+.badge-r70a-inv {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid #f59e0b;
+}
+
+.badge-tamut {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid #10b981;
+}
+
+/* Interactive Bin Inspector Banner */
+.bin-inspector-dock {
+  background: linear-gradient(90deg, #162038 0%, #1b253d 100%);
+  border: 1px solid #38bdf8;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  display: grid;
+  grid-template-columns: 340px 1fr 1fr;
+  gap: 16px;
+  align-items: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 1280px) {
+  .bin-inspector-dock {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tile Boxes for Phase Portraits & Dose Curves (True Centered 3x3 Matrix) */
+.portrait-grid-9 {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  justify-content: center;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .portrait-grid-9 {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+.tile-card {
+  background: var(--panel-deep);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: border-color 0.12s ease, transform 0.1s ease;
+}
+
+.tile-card:hover {
+  border-color: var(--accent);
+}
+
+.tile-card.active-metric {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.tile-card-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tile-card-header .mono-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.zoom-btn-mini {
+  background: var(--panel-alt);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.zoom-btn-mini:hover {
+  background: var(--accent-dark);
+  color: #fff;
+}
+
+/* Quadrant Legend Pills */
+.quad-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  background: var(--panel-deep);
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.quad-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.quad-dot.q1 { background: #ef4444; }
+.quad-dot.q2 { background: #f97316; }
+.quad-dot.q3 { background: #3b82f6; }
+.quad-dot.q4 { background: #10b981; }
+.quad-dot.bin { background: #38bdf8; box-shadow: 0 0 6px #38bdf8; }
+
+/* Quantitative Tables (matching table.fov-table in H9 Atlas) */
+table.fov-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: var(--panel);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+}
+
+table.fov-table th,
+table.fov-table td {
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+table.fov-table th {
+  background: var(--panel-alt);
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+table.fov-table tr:hover {
+  background: rgba(56, 189, 248, 0.08);
+}
+
+/* 3x3 Family Matrix Grid (Viewport-Adaptive Centered 3x3) */
+.matrix-3x3-grid {
+  display: grid;
+  grid-template-columns: 88px repeat(3, max-content);
+  justify-content: center;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.matrix-hdr-cell {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--accent);
+  text-align: center;
+}
+
+/* 6x6 Full Library Super-Grid */
+.supergrid-2x2 {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  justify-content: center;
+  gap: 14px;
+}
+
+@media (max-width: 1200px) {
+  .supergrid-2x2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.superquad-card {
+  background: var(--panel-deep);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.superquad-banner {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.superquad-banner.wt-inv   { background: rgba(239, 68, 68, 0.16); color: #fca5a5; }
+.superquad-banner.wt-upr   { background: rgba(59, 130, 246, 0.16); color: #93c5fd; }
+.superquad-banner.r70a-inv { background: rgba(245, 158, 11, 0.16); color: #fde68a; }
+.superquad-banner.r70a-upr { background: rgba(168, 85, 247, 0.16); color: #d8b4fe; }
+
+.superquad-3x3-inner {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+}
+
+/* Target Finder Sliders */
+.target-slider-row {
+  background: var(--panel-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.target-slider-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Floating Tooltip */
+#portrait-tooltip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  background: rgba(11, 15, 25, 0.96);
+  color: #f8fafc;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 11px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+  display: none;
+  min-width: 245px;
+}
+
+#portrait-tooltip .tt-title {
+  font-weight: 700;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+  margin-bottom: 4px;
+}
+
+#portrait-tooltip .tt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#portrait-tooltip .tt-val {
+  font-weight: 700;
+  color: #fde047;
+}
