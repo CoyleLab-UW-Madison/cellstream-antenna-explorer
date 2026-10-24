@@ -1,8 +1,7 @@
 /**
  * explorer.css
- * Dark-slate scientific interface styled after H9_FOV_Physiology_Atlas_Viewer.html.
- * Combines clean Arial / system sans-serif UI typography with JetBrains Mono / Consolas
- * monospace readouts for stoichiometry coordinates, Hill equations, and quantitative tables.
+ * Dark-slate scientific interface with Top-Line HUD + Left Sidebar (Pulldowns & Active Architecture)
+ * + Right Main Viewing Area, styled in the dark-slate H9 Physiology Atlas aesthetic.
  */
 
 :root {
@@ -19,7 +18,7 @@
   --purple: #a855f7;
   --purple-light: #c084fc;
 
-  /* Family Accent Colors (matching H9 Atlas lineage pill style) */
+  /* Family Accent Colors */
   --fam-wt-upr: #3b82f6;
   --fam-wt-inv: #ef4444;
   --fam-r70a-upr: #a855f7;
@@ -32,7 +31,7 @@
   --q3-color: #60a5fa;
   --q4-color: #34d399;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", Consolas, "Courier New", monospace;
 }
 
@@ -40,119 +39,332 @@
   box-sizing: border-box;
 }
 
-body {
+html, body {
   margin: 0;
   padding: 0;
+  height: 100%;
   font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  overflow: hidden;
 }
 
-/* Sticky Top Header (matching H9_FOV_Physiology_Atlas_Viewer.html) */
-header {
-  background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+/* ============================================================================
+ * 1. TOP LINE HUD BAR ("cellstream antenna explorer | HUD type stuff")
+ * ============================================================================ */
+.top-hud-bar {
+  height: 54px;
+  background: linear-gradient(90deg, #0d1424 0%, #162038 100%);
   border-bottom: 1px solid var(--border);
-  padding: 12px 22px;
+  padding: 0 16px;
   display: flex;
-  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  position: sticky;
-  top: 0;
+  gap: 14px;
   z-index: 100;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
 }
 
-.title-block h1 {
+.hud-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 275px;
+  border-right: 1px solid var(--border);
+  padding-right: 14px;
+}
+
+.hud-logo-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  flex-shrink: 0;
+}
+
+.hud-brand h1 {
   margin: 0;
-  font-size: 17.5px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
-.title-block p {
-  margin: 2px 0 0 0;
-  font-size: 12px;
+.hud-subtitle {
+  font-size: 10.5px;
   color: var(--muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
 }
 
-.mode-tabs {
+.hud-telemetry {
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  flex: 1;
+  justify-content: flex-end;
+  scrollbar-width: none;
 }
 
-.mode-btn {
-  background: var(--panel-alt);
-  color: var(--text);
+.hud-telemetry::-webkit-scrollbar {
+  display: none;
+}
+
+.hud-chip {
+  background: rgba(16, 24, 41, 0.85);
   border: 1px solid var(--border);
-  padding: 6px 12px;
   border-radius: 6px;
-  cursor: pointer;
+  padding: 4px 9px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.hud-chip-lbl {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.hud-chip-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 1px;
+}
+
+/* ============================================================================
+ * 2. APPLICATION SHELL: LEFT SIDEBAR + MAIN VIEWING AREA
+ * ============================================================================ */
+.app-shell {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: calc(100vh - 54px);
+  width: 100vw;
+  overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  html, body {
+    overflow: auto;
+  }
+  .app-shell {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+}
+
+/* Left Sidebar */
+.app-sidebar {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sidebar-controls {
+  padding: 12px 13px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.sidebar-architecture {
+  border-top: 1px solid var(--border);
+  background: var(--panel-deep);
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+
+.sb-section-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sb-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sb-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sb-select {
+  width: 100%;
+  background: var(--panel-deep);
+  color: var(--text);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 6px 9px;
   font-size: 12px;
   font-weight: 600;
   font-family: var(--font-sans);
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+
+.sb-select:hover,
+.sb-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.sb-row-inline {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.sb-step-btn {
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sb-step-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Segmented Toggle Row in Sidebar */
+.sb-seg-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  background: var(--panel-deep);
+  padding: 3px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.sb-seg-btn {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-radius: 4px;
+  padding: 5px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  text-align: center;
   transition: all 0.12s ease;
 }
 
-.mode-btn:hover {
-  border-color: var(--accent);
+.sb-seg-btn:hover {
+  color: var(--text);
 }
 
-.mode-btn.active {
+.sb-seg-btn.active {
   background: var(--accent-dark);
-  border-color: var(--accent);
   color: #ffffff;
-}
-
-/* Control Bars (Row 1: Circuit/Data Controls, Row 2: Focus/Zoom View) */
-.controls-bar {
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 22px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
-}
-
-.focus-bar {
-  background: var(--panel-deep);
-  border-bottom: 1px solid var(--border);
-  padding: 9px 22px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  align-items: center;
-}
-
-.ctrl-group {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-
-.ctrl-label {
-  font-size: 11px;
   font-weight: 700;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-right: 4px;
-  letter-spacing: 0.03em;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
+.sb-divider {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2px 0;
+}
+
+/* ============================================================================
+ * 3. MAIN VIEWING AREA ("main viewing area")
+ * ============================================================================ */
+.main-viewer {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 16px 24px 16px;
+  background: var(--bg);
+}
+
+#view-container {
+  max-width: 1800px;
+  margin: 0 auto;
+}
+
+/* Single Viewer 2x2 Dashboard Grid (matching User Mockup!) */
+.single-2x2-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(360px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+@media (max-width: 1240px) {
+  .single-2x2-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Primary Dark Cards */
+.fov-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 13px;
+  margin-bottom: 12px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+.fov-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+/* Pill Buttons & Select Controls */
 .pill-btn {
   background: var(--panel-alt);
   color: var(--text);
   border: 1px solid var(--border);
-  padding: 5px 10px;
+  padding: 4px 9px;
   border-radius: 5px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   font-family: var(--font-sans);
   transition: all 0.12s ease;
@@ -169,143 +381,24 @@ header {
   font-weight: 700;
 }
 
-.pill-btn.focus-special.active {
-  background: var(--purple);
-  color: #ffffff;
-  border-color: var(--purple-light);
-}
-
-.pill-btn.fam-wt-upr.active {
-  background: var(--fam-wt-upr);
-  color: #ffffff;
-  border-color: #60a5fa;
-}
-
-.pill-btn.fam-wt-inv.active {
-  background: var(--fam-wt-inv);
-  color: #ffffff;
-  border-color: #f87171;
-}
-
-.pill-btn.fam-r70a-upr.active {
-  background: var(--fam-r70a-upr);
-  color: #ffffff;
-  border-color: #c084fc;
-}
-
-.pill-btn.fam-r70a-inv.active {
-  background: var(--fam-r70a-inv);
-  color: #0f172a;
-  border-color: #fbbf24;
-}
-
-.pill-btn.fam-tamut.active {
-  background: var(--fam-tamut);
-  color: #0f172a;
-  border-color: #34d399;
-}
-
 select.dark-select {
   background: var(--panel-alt);
   color: var(--text);
   border: 1px solid var(--border);
-  padding: 5px 9px;
+  padding: 4px 8px;
   border-radius: 5px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   font-family: var(--font-sans);
   cursor: pointer;
 }
 
-select.dark-select:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.kb-hint {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.04);
-  padding: 4px 9px;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-  font-family: var(--font-mono);
-}
-
-/* Main Content Container */
-main {
-  padding: 16px 22px 44px 22px;
-  max-width: 1920px;
-  margin: 0 auto;
-}
-
-/* 8-Card Metrics Strip (matching H9_FOV_Physiology_Atlas_Viewer.html) */
-.metrics-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.metric-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 12px;
-}
-
-.metric-card .m-label {
-  font-size: 10.5px;
-  color: var(--muted);
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-}
-
-.metric-card .m-val {
-  font-size: 17px;
-  font-weight: 700;
-  margin-top: 2px;
-  color: var(--accent);
-  font-family: var(--font-mono);
-}
-
-.metric-card .m-sub {
-  font-size: 10.5px;
-  color: var(--muted);
-  margin-top: 2px;
-  font-family: var(--font-mono);
-}
-
-/* Primary Dark Cards (matching .fov-card in H9 Atlas) */
-.fov-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
-  margin-bottom: 16px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
-}
-
-.fov-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-
 /* Badges */
 .badge {
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: 4px;
   font-weight: 700;
-  font-size: 11.5px;
+  font-size: 11px;
   display: inline-block;
   font-family: var(--font-mono);
 }
@@ -340,35 +433,15 @@ main {
   border: 1px solid #10b981;
 }
 
-/* Interactive Bin Inspector Banner */
-.bin-inspector-dock {
-  background: linear-gradient(90deg, #162038 0%, #1b253d 100%);
-  border: 1px solid #38bdf8;
-  border-radius: 8px;
-  padding: 12px 14px;
-  margin-bottom: 14px;
-  display: grid;
-  grid-template-columns: 340px 1fr 1fr;
-  gap: 16px;
-  align-items: center;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-}
-
-@media (max-width: 1280px) {
-  .bin-inspector-dock {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Tile Boxes for Phase Portraits & Dose Curves (True Centered 3x3 Matrix) */
+/* Tile Cards for Phase Portraits & Dose Curves */
 .portrait-grid-9 {
   display: grid;
   grid-template-columns: repeat(3, max-content);
   justify-content: center;
-  gap: 10px;
+  gap: 9px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .portrait-grid-9 {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
@@ -378,15 +451,15 @@ main {
   background: var(--panel-deep);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 7px 9px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  transition: border-color 0.12s ease, transform 0.1s ease;
+  transition: border-color 0.12s ease;
 }
 
 .tile-card:hover {
-  border-color: var(--accent);
+  border-color: var(--border-light);
 }
 
 .tile-card.active-metric {
@@ -405,6 +478,7 @@ main {
   margin-bottom: 6px;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
+  gap: 6px;
 }
 
 .tile-card-header .mono-tag {
@@ -412,6 +486,7 @@ main {
   font-size: 11px;
   color: var(--accent);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .zoom-btn-mini {
@@ -434,22 +509,22 @@ main {
 .quad-legend-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: 11.5px;
+  gap: 10px;
+  font-size: 11px;
   font-family: var(--font-mono);
   color: var(--muted);
   background: var(--panel-deep);
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 6px;
   border: 1px solid var(--border);
 }
 
 .quad-dot {
   display: inline-block;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  margin-right: 5px;
+  margin-right: 4px;
 }
 
 .quad-dot.q1 { background: #ef4444; }
@@ -458,13 +533,13 @@ main {
 .quad-dot.q4 { background: #10b981; }
 .quad-dot.bin { background: #38bdf8; box-shadow: 0 0 6px #38bdf8; }
 
-/* Quantitative Tables (matching table.fov-table in H9 Atlas) */
+/* Quantitative Tables */
 table.fov-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 11.5px;
   background: var(--panel);
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
   border: 1px solid var(--border);
   font-family: var(--font-mono);
@@ -472,7 +547,7 @@ table.fov-table {
 
 table.fov-table th,
 table.fov-table td {
-  padding: 7px 10px;
+  padding: 5px 8px;
   text-align: left;
   border-bottom: 1px solid var(--border);
 }
@@ -483,7 +558,7 @@ table.fov-table th {
   cursor: pointer;
   user-select: none;
   font-family: var(--font-sans);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -491,12 +566,17 @@ table.fov-table tr:hover {
   background: rgba(56, 189, 248, 0.08);
 }
 
+table.fov-table tr.bin-highlight-row {
+  background: rgba(56, 189, 248, 0.14);
+  border-top: 1px solid var(--accent);
+}
+
 /* 3x3 Family Matrix Grid (Viewport-Adaptive Centered 3x3) */
 .matrix-3x3-grid {
   display: grid;
-  grid-template-columns: 88px repeat(3, max-content);
+  grid-template-columns: 82px repeat(3, max-content);
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
   align-items: stretch;
 }
 
@@ -504,13 +584,13 @@ table.fov-table tr:hover {
   background: var(--panel-alt);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 5px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--accent);
   text-align: center;
 }
@@ -520,10 +600,10 @@ table.fov-table tr:hover {
   display: grid;
   grid-template-columns: repeat(2, max-content);
   justify-content: center;
-  gap: 14px;
+  gap: 10px;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1300px) {
   .supergrid-2x2 {
     grid-template-columns: 1fr;
   }
@@ -537,8 +617,8 @@ table.fov-table tr:hover {
 }
 
 .superquad-banner {
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 5px 10px;
+  font-size: 11.5px;
   font-weight: 700;
   display: flex;
   justify-content: space-between;
@@ -555,8 +635,8 @@ table.fov-table tr:hover {
   display: grid;
   grid-template-columns: repeat(3, max-content);
   justify-content: center;
-  gap: 6px;
-  padding: 8px;
+  gap: 5px;
+  padding: 6px;
 }
 
 /* Target Finder Sliders */
@@ -564,8 +644,8 @@ table.fov-table tr:hover {
   background: var(--panel-deep);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 8px 10px;
-  margin-bottom: 8px;
+  padding: 7px 9px;
+  margin-bottom: 7px;
 }
 
 .target-slider-row input[type="range"] {

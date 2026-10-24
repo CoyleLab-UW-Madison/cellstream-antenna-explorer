@@ -87,6 +87,80 @@
     return null;
   };
 
+  /**
+   * Extracts the empirical per-dose trace { doses, nvox, med, q25, q75 } for a specific 2D bin (bx, by)
+   * and metric key ("coupling", "fm_pct", "carrier_fold", "loading_fold", "cargo_am_fold", "carrier_pct").
+   */
+  window.extractBinEmpiricalTrace = function(binObj, metricKey) {
+    if (!binObj || !binObj.traces || !binObj.traces.d) return null;
+    const tr = binObj.traces;
+    const doses = tr.d;
+    const nvox = tr.n || [];
+    if (metricKey === "coupling" && tr.coup) {
+      return { doses, nvox, med: tr.coup[0], q25: tr.coup[1], q75: tr.coup[2] };
+    } else if (metricKey === "fm_pct" && tr.fm_pct) {
+      return { doses, nvox, med: tr.fm_pct[0], q25: tr.fm_pct[1], q75: tr.fm_pct[2] };
+    } else if (metricKey === "carrier_fold" && tr.cr_fold) {
+      return { doses, nvox, med: tr.cr_fold[0], q25: tr.cr_fold[1], q75: tr.cr_fold[2] };
+    } else if (metricKey === "carrier_pct" && tr.cr_fold) {
+      return {
+        doses,
+        nvox,
+        med: tr.cr_fold[0].map(v => v !== null ? 100.0 * (v - 1.0) : null),
+        q25: tr.cr_fold[1].map(v => v !== null ? 100.0 * (v - 1.0) : null),
+        q75: tr.cr_fold[2].map(v => v !== null ? 100.0 * (v - 1.0) : null)
+      };
+    } else if (metricKey === "loading_fold" && tr.load_fold) {
+      return { doses, nvox, med: tr.load_fold[0], q25: tr.load_fold[1], q75: tr.load_fold[2] };
+    } else if (metricKey === "cargo_am_fold" && tr.am_fold) {
+      return { doses, nvox, med: tr.am_fold[0], q25: tr.am_fold[1], q75: tr.am_fold[2] };
+    }
+    return null;
+  };
+
+  function drawErrorBar(ctx, x, yLowPx, yHighPx, color, alpha = 0.75, capHalfW = 2.6, lw = 1.25) {
+    if (!Number.isFinite(yLowPx) || !Number.isFinite(yHighPx)) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(x, yLowPx);
+    ctx.lineTo(x, yHighPx);
+    if (capHalfW > 0) {
+      ctx.moveTo(x - capHalfW, yLowPx);
+      ctx.lineTo(x + capHalfW, yLowPx);
+      ctx.moveTo(x - capHalfW, yHighPx);
+      ctx.lineTo(x + capHalfW, yHighPx);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function buildDynamicTicks(ymin, ymax, defaultTicks, refLine = null) {
+    const span = Math.max(1e-6, ymax - ymin);
+    const rawStep = span / 4.0;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const residual = rawStep / mag;
+    let niceStep = mag;
+    if (residual > 5) niceStep = 10 * mag;
+    else if (residual > 2.5) niceStep = 5 * mag;
+    else if (residual > 1.5) niceStep = 2 * mag;
+
+    const first = Math.ceil(ymin / niceStep) * niceStep;
+    const ticks = [];
+    for (let v = first; v <= ymax + 1e-7; v += niceStep) {
+      ticks.push(Number(v.toFixed(4)));
+    }
+    if (refLine !== null && refLine !== undefined && refLine >= ymin && refLine <= ymax) {
+      if (!ticks.some(t => Math.abs(t - refLine) < niceStep * 0.25)) {
+        ticks.push(refLine);
+        ticks.sort((a, b) => a - b);
+      }
+    }
+    return ticks.length >= 2 ? ticks : defaultTicks;
+  }
+
   function drawMarker(ctx, type, x, y, r, color, strokeCol = null) {
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -116,7 +190,8 @@
 
   /**
    * Renders the 4-Quadrant (Q1..Q4) Dose-Response Curves (0–5.0 mM) onto a <canvas>,
-   * PLUS an optional glowing cyan curve for the currently clicked 2D stoichiometry bin `options.selectedBin = { bx, by }`!
+   * PLUS an optional glowing cyan curve + empirical IQR error bars for the currently clicked
+   * 2D stoichiometry bin `options.selectedBin = { bx, by }`!
    */
   window.renderQuadrantDoseCurveCanvas = function(canvas, construct, options = {}) {
     if (!canvas) return;
@@ -129,7 +204,7 @@
 
     const { ctx, cssW, cssH } = setupHiDPICanvas(canvas, 300, 240);
 
-    const padL = showAxesLabels ? 42 : 26;
+    const padL = showAxesLabels ? 44 : 28;
     const padR = 10;
     const padT = 10;
     const padB = showAxesLabels ? 28 : 18;
@@ -150,11 +225,69 @@
       return padL + Math.max(0, Math.min(1, frac)) * plotW;
     };
 
-    const ymin = qSpec.ymin;
-    const ymax = qSpec.ymax;
+    const qDict = construct ? (dataSource === "cell" ? (construct.quadrants_cell || {}) : (construct.quadrants_pixel || {})) : {};
+    const isClamped = Boolean(construct && construct.is_clamped_0mM);
+
+    let binObj = null;
+    let binFit = null;
+    let binTrace = null;
+    if (construct && selectedBin && selectedBin.bx !== null && selectedBin.bx !== undefined && construct.bins_2d) {
+      binObj = construct.bins_2d.find(b => b.bx === selectedBin.bx && b.by === selectedBin.by) || null;
+      binFit = window.extractBinHillParams(binObj, metricKey);
+      binTrace = window.extractBinEmpiricalTrace(binObj, metricKey);
+    }
+
+    // Dynamic auto-expanding Y-axis bounds so no curve or error bar ever clips off-screen
+    let ymin = qSpec.ymin;
+    let ymax = qSpec.ymax;
+    let dataMin = Infinity;
+    let dataMax = -Infinity;
+    const pushBound = v => {
+      if (v !== null && v !== undefined && Number.isFinite(v)) {
+        if (v < dataMin) dataMin = v;
+        if (v > dataMax) dataMax = v;
+      }
+    };
+
+    for (const st of QUAD_STYLES) {
+      const mObj = ((qDict[st.code] || {}).metrics || {})[metricKey];
+      if (!mObj) continue;
+      (mObj.med || []).forEach(pushBound);
+      if (st.showIqr && !selectedBin) {
+        (mObj.q25 || []).forEach(pushBound);
+        (mObj.q75 || []).forEach(pushBound);
+      }
+      if (mObj.fit) {
+        pushBound(mObj.fit.y0);
+        pushBound(mObj.fit.y5mM);
+      }
+    }
+    if (binFit) {
+      pushBound(binFit.y0);
+      pushBound(binFit.y5mM);
+    }
+    if (binTrace) {
+      (binTrace.med || []).forEach(pushBound);
+      (binTrace.q25 || []).forEach(pushBound);
+      (binTrace.q75 || []).forEach(pushBound);
+    }
+
+    let boundsExpanded = false;
+    const baseSpan = Math.max(1e-6, ymax - ymin);
+    if (Number.isFinite(dataMax) && dataMax > ymax - 0.04 * baseSpan) {
+      ymax = dataMax + 0.08 * Math.max(baseSpan, dataMax - Math.min(ymin, dataMin));
+      boundsExpanded = true;
+    }
+    if (Number.isFinite(dataMin) && dataMin < ymin + 0.04 * baseSpan) {
+      const rawNewMin = dataMin - 0.07 * Math.max(baseSpan, Math.max(ymax, dataMax) - dataMin);
+      ymin = (metricKey === "coupling" || metricKey === "cell_territory_pct") ? Math.max(0.0, rawNewMin) : rawNewMin;
+      boundsExpanded = true;
+    }
+    const yTicks = boundsExpanded ? buildDynamicTicks(ymin, ymax, qSpec.yticks, qSpec.refLine) : qSpec.yticks;
+
     const yToPx = val => {
       const frac = (val - ymin) / Math.max(1e-9, ymax - ymin);
-      return padT + plotH - Math.max(-0.05, Math.min(1.05, frac)) * plotH;
+      return padT + plotH - Math.max(-0.04, Math.min(1.04, frac)) * plotH;
     };
 
     // Gridlines
@@ -167,7 +300,7 @@
       ctx.moveTo(px, padT);
       ctx.lineTo(px, padT + plotH);
     }
-    for (const yt of qSpec.yticks) {
+    for (const yt of yTicks) {
       const py = yToPx(yt);
       ctx.moveTo(padL, py);
       ctx.lineTo(padL + plotW, py);
@@ -176,8 +309,8 @@
 
     // Shaded floor / buffered band
     if (qSpec.floorBand) {
-      const yTop = yToPx(qSpec.floorBand[1]);
-      const yBot = yToPx(qSpec.floorBand[0]);
+      const yTop = Math.max(padT, Math.min(padT + plotH, yToPx(qSpec.floorBand[1])));
+      const yBot = Math.max(padT, Math.min(padT + plotH, yToPx(qSpec.floorBand[0])));
       ctx.fillStyle = metricKey === "fm_pct" ? "rgba(16, 185, 129, 0.10)" : "rgba(148, 163, 184, 0.12)";
       ctx.fillRect(padL, yTop, plotW, yBot - yTop);
     }
@@ -185,14 +318,16 @@
     // Reference horizontal line
     if (qSpec.refLine !== null && qSpec.refLine !== undefined) {
       const yRef = yToPx(qSpec.refLine);
-      ctx.strokeStyle = "rgba(226, 232, 240, 0.45)";
-      ctx.lineWidth = 0.9;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath();
-      ctx.moveTo(padL, yRef);
-      ctx.lineTo(padL + plotW, yRef);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      if (yRef >= padT && yRef <= padT + plotH) {
+        ctx.strokeStyle = "rgba(226, 232, 240, 0.45)";
+        ctx.lineWidth = 0.9;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(padL, yRef);
+        ctx.lineTo(padL + plotW, yRef);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     // Axis break "//" between 0 mM and 0.1 mM
@@ -203,9 +338,6 @@
     ctx.fillText("//", brkX, padT + plotH + 4);
 
     if (!construct) return;
-
-    const qDict = dataSource === "cell" ? (construct.quadrants_cell || {}) : (construct.quadrants_pixel || {});
-    const isClamped = Boolean(construct.is_clamped_0mM);
 
     // Clip to plot area
     ctx.save();
@@ -263,6 +395,11 @@
         }
         ctx.closePath();
         ctx.fill();
+
+        // Vertical IQR error bars on Q1 and Q4 when no single bin is selected
+        for (const p of pts) {
+          drawErrorBar(ctx, p.x, p.y25, p.y75, st.color, 0.55, 2.0, 1.0);
+        }
       }
 
       if (fit && fit.y0 !== null && fit.y0 !== undefined && fit.ec50 !== null && fit.ec50 !== undefined) {
@@ -270,8 +407,8 @@
         const startC = isClamped ? 0.18 : 0.04;
         const nSteps = 55;
         ctx.strokeStyle = st.color;
-        ctx.lineWidth = selectedBin ? st.lw * 0.78 : st.lw;
-        ctx.globalAlpha = selectedBin ? 0.65 : 0.95;
+        ctx.lineWidth = selectedBin ? st.lw * 0.72 : st.lw;
+        ctx.globalAlpha = selectedBin ? 0.55 : 0.95;
         ctx.setLineDash(st.dash);
         ctx.beginPath();
         for (let k = 0; k <= nSteps; k++) {
@@ -305,71 +442,107 @@
       }
 
       for (const p of pts) {
-        drawMarker(ctx, st.marker, p.x, p.y, selectedBin ? 2.2 : 2.7, st.color);
+        drawMarker(ctx, st.marker, p.x, p.y, selectedBin ? 2.0 : 2.7, st.color);
       }
     }
 
-    // 2. If a specific 2D bin `selectedBin = { bx, by }` is clicked/selected, overlay its exact Hill curve in glowing cyan!
-    let binFit = null;
-    if (selectedBin && selectedBin.bx !== null && selectedBin.bx !== undefined && construct.bins_2d) {
-      const binObj = construct.bins_2d.find(b => b.bx === selectedBin.bx && b.by === selectedBin.by);
-      binFit = window.extractBinHillParams(binObj, metricKey);
-      if (binFit && binFit.y0 !== null && binFit.y5mM !== null) {
-        const startC = isClamped ? 0.18 : 0.04;
-        const nSteps = 65;
+    // 2. If a specific 2D bin `selectedBin = { bx, by }` is clicked/selected, overlay its empirical IQR ribbon, error bars, and Hill curve in glowing cyan!
+    if (binFit && binFit.y0 !== null && binFit.y5mM !== null) {
+      const startC = isClamped ? 0.18 : 0.04;
+      const nSteps = 65;
 
-        // Outer glow
-        ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
-        ctx.lineWidth = 6.0;
-        ctx.beginPath();
-        for (let k = 0; k <= nSteps; k++) {
-          const frac = k / nSteps;
-          const cVal = Math.pow(10, Math.log10(startC) + frac * (Math.log10(5.2) - Math.log10(startC)));
-          const effDose = (!isClamped && k === 0) ? 0.0 : cVal;
-          const yVal = evalHill(effDose, binFit.y0, binFit.dyMax, binFit.ec50, binFit.nhill);
-          const px = xToPx(cVal);
-          const py = yToPx(yVal);
-          if (k === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
+      // Collect empirical points + error bars if available
+      const empPts = [];
+      if (binTrace && binTrace.doses && binTrace.med) {
+        for (let i = 0; i < binTrace.doses.length; i++) {
+          const dVal = binTrace.doses[i];
+          const mVal = binTrace.med[i];
+          if (mVal === null || mVal === undefined || !Number.isFinite(mVal)) continue;
+          const q25Val = (binTrace.q25 && Number.isFinite(binTrace.q25[i])) ? binTrace.q25[i] : mVal;
+          const q75Val = (binTrace.q75 && Number.isFinite(binTrace.q75[i])) ? binTrace.q75[i] : mVal;
+          empPts.push({
+            dose: dVal,
+            x: xToPx(dVal),
+            y: yToPx(mVal),
+            y25: yToPx(q25Val),
+            y75: yToPx(q75Val)
+          });
         }
-        ctx.stroke();
+      }
 
-        // Crisp bright cyan curve
-        ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 2.6;
+      // Shaded cyan IQR confidence band across empirical doses
+      if (empPts.length >= 2) {
+        ctx.fillStyle = "rgba(56, 189, 248, 0.17)";
         ctx.beginPath();
-        for (let k = 0; k <= nSteps; k++) {
-          const frac = k / nSteps;
-          const cVal = Math.pow(10, Math.log10(startC) + frac * (Math.log10(5.2) - Math.log10(startC)));
-          const effDose = (!isClamped && k === 0) ? 0.0 : cVal;
-          const yVal = evalHill(effDose, binFit.y0, binFit.dyMax, binFit.ec50, binFit.nhill);
-          const px = xToPx(cVal);
-          const py = yToPx(yVal);
-          if (k === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
+        for (let i = 0; i < empPts.length; i++) {
+          if (i === 0) ctx.moveTo(empPts[i].x, empPts[i].y75);
+          else ctx.lineTo(empPts[i].x, empPts[i].y75);
         }
-        ctx.stroke();
+        for (let i = empPts.length - 1; i >= 0; i--) {
+          ctx.lineTo(empPts[i].x, empPts[i].y25);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
 
-        // Draw dose points at 0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0 mM along the bin curve
+      // Outer glow for Hill curve
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.32)";
+      ctx.lineWidth = 5.5;
+      ctx.beginPath();
+      for (let k = 0; k <= nSteps; k++) {
+        const frac = k / nSteps;
+        const cVal = Math.pow(10, Math.log10(startC) + frac * (Math.log10(5.2) - Math.log10(startC)));
+        const effDose = (!isClamped && k === 0) ? 0.0 : cVal;
+        const yVal = evalHill(effDose, binFit.y0, binFit.dyMax, binFit.ec50, binFit.nhill);
+        const px = xToPx(cVal);
+        const py = yToPx(yVal);
+        if (k === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // Crisp bright cyan Hill curve
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let k = 0; k <= nSteps; k++) {
+        const frac = k / nSteps;
+        const cVal = Math.pow(10, Math.log10(startC) + frac * (Math.log10(5.2) - Math.log10(startC)));
+        const effDose = (!isClamped && k === 0) ? 0.0 : cVal;
+        const yVal = evalHill(effDose, binFit.y0, binFit.dyMax, binFit.ec50, binFit.nhill);
+        const px = xToPx(cVal);
+        const py = yToPx(yVal);
+        if (k === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // Draw empirical points + vertical q25-q75 IQR error bars (or evaluated Hill points if no empirical trace)
+      if (empPts.length > 0) {
+        for (const ep of empPts) {
+          drawErrorBar(ctx, ep.x, ep.y25, ep.y75, "#7dd3fc", 0.92, 2.8, 1.35);
+          drawMarker(ctx, "diamond", ep.x, ep.y, 3.6, "#38bdf8", "#0f172a");
+        }
+      } else {
         const stdDoses = isClamped ? [0.2, 0.5, 1.0, 2.0, 5.0] : [0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0];
         for (const dVal of stdDoses) {
           const yVal = evalHill(dVal, binFit.y0, binFit.dyMax, binFit.ec50, binFit.nhill);
           drawMarker(ctx, "diamond", xToPx(dVal), yToPx(yVal), 3.6, "#38bdf8", "#0f172a");
         }
+      }
 
-        // Draw EC50 marker on the bin curve
-        if (binFit.ec50 && binFit.ec50 >= 0.04 && binFit.ec50 <= 5.0 && (binFit.r2 || 0) >= 0.35) {
-          const ecY = evalHill(binFit.ec50, binFit.y0, binFit.dyMax, binFit.ec50, binFit.nhill);
-          const ex = xToPx(binFit.ec50);
-          const ey = yToPx(ecY);
-          ctx.fillStyle = "#fde047";
-          ctx.strokeStyle = "#0f172a";
-          ctx.lineWidth = 1.6;
-          ctx.beginPath();
-          ctx.arc(ex, ey, 4.5, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.stroke();
-        }
+      // Draw EC50 marker on the bin curve
+      if (binFit.ec50 && binFit.ec50 >= 0.04 && binFit.ec50 <= 5.0 && (binFit.r2 || 0) >= 0.35) {
+        const ecY = evalHill(binFit.ec50, binFit.y0, binFit.dyMax, binFit.ec50, binFit.nhill);
+        const ex = xToPx(binFit.ec50);
+        const ey = yToPx(ecY);
+        ctx.fillStyle = "#fde047";
+        ctx.strokeStyle = "#0f172a";
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(ex, ey, 4.5, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
       }
     }
 
@@ -400,7 +573,8 @@
         isClamped ? `Q4: →${fmtV(f4.y5mM)} (${fmtEc(f4)})` : `Q4: ${fmtV(f4.y0)}→${fmtV(f4.y5mM)} (${fmtEc(f4)})`
       ];
       if (selectedBin && binFit) {
-        lines.push(`Bin(${selectedBin.bx},${selectedBin.by}): ${fmtV(binFit.y0)}→${fmtV(binFit.y5mM)} (${fmtEc(binFit)})`);
+        const nvStr = binObj && binObj.nvox ? ` [n≈${Math.round(binObj.nvox)}/d]` : "";
+        lines.push(`Bin(${selectedBin.bx},${selectedBin.by}): ${fmtV(binFit.y0)}→${fmtV(binFit.y5mM)} (${fmtEc(binFit)})${nvStr}`);
       }
 
       ctx.font = "700 8.5px 'JetBrains Mono', Consolas, monospace";
@@ -431,8 +605,12 @@
       ctx.fillText(xTickLabels[i], xToPx(xTicks[i]), padT + plotH + 11);
     }
     ctx.textAlign = "right";
-    for (const yt of qSpec.yticks) {
-      ctx.fillText(yt.toFixed(qSpec.decimals > 1 ? 2 : 0), padL - 4, yToPx(yt) + 3);
+    for (const yt of yTicks) {
+      const py = yToPx(yt);
+      if (py >= padT - 2 && py <= padT + plotH + 4) {
+        const decDigits = qSpec.decimals > 1 ? 2 : (Math.abs(yt - Math.round(yt)) > 0.05 ? 1 : 0);
+        ctx.fillText(yt.toFixed(decDigits), padL - 4, py + 3);
+      }
     }
 
     if (showAxesLabels) {
@@ -451,16 +629,24 @@
   };
 
   /**
-   * Renders a dedicated Clicked-Bin (bx, by) Multi-Feature Dose-Response Plot onto a <canvas>,
-   * showing how Coupling C(c), Frequency Shift ΔF(c), and Loading Fold respond across 0–5 mM Bt₂cAMP
-   * inside that specific stoichiometry bin!
+   * Renders a dedicated Clicked-Bin (bx, by) Multi-Feature Co-Dosing Plot onto a <canvas>,
+   * showing how Coupling C(c), Frequency Shift ΔF(c)%, and Carrier Amp ΔD(c)% co-dose across 0–5 mM Bt₂cAMP.
+   *
+   * Key design features:
+   *  1. Shared 0 mM Baseline Origin (`yZero`): The Left Axis (Coupling C(c), starting at C₀) and Right Axis
+   *     (% Shift ΔF% & ΔCarrier%, starting at 0.0%) are mathematically aligned so C₀ and 0.0% map to the
+   *     EXACT same vertical pixel `yZero`! All three curves originate from the exact same spot at 0 mM.
+   *  2. Empirical Points + Vertical `q25–q75` IQR Error Bars: Draws the actual per-dose medians and IQR error
+   *     bars for all three metrics alongside their smooth Hill fits.
+   *  3. Dynamic Dual-Axis Auto-Scaling: Automatically expands both axes around `yZero` so no curve or error
+   *     bar ever clips or goes off-screen.
    */
   window.renderSingleBinMultiCurveCanvas = function(canvas, construct, bx, by) {
     if (!canvas || !construct) return;
     const { ctx, cssW, cssH } = setupHiDPICanvas(canvas, 340, 220);
 
-    const padL = 42;
-    const padR = 42;
+    const padL = 44;
+    const padR = 44;
     const padT = 12;
     const padB = 28;
     const plotW = cssW - padL - padR;
@@ -482,6 +668,7 @@
       return;
     }
 
+    const isClamped = Boolean(construct.is_clamped_0mM);
     const logMin = Math.log10(0.034);
     const logMax = Math.log10(5.8);
     const xToPx = dose => {
@@ -490,42 +677,139 @@
       return padL + Math.max(0, Math.min(1, frac)) * plotW;
     };
 
-    // Left Y-axis: Dimensionless Coupling C(c) in [0.0, 1.15]
-    const yLeftToPx = val => {
-      const frac = (val - 0.0) / 1.15;
-      return padT + plotH - Math.max(-0.05, Math.min(1.05, frac)) * plotH;
+    const coupFit = window.extractBinHillParams(binObj, "coupling");
+    const fmFit = window.extractBinHillParams(binObj, "fm_pct");
+    const crFit = window.extractBinHillParams(binObj, "carrier_fold");
+
+    const coupTr = window.extractBinEmpiricalTrace(binObj, "coupling");
+    const fmTr = window.extractBinEmpiricalTrace(binObj, "fm_pct");
+    const crTr = window.extractBinEmpiricalTrace(binObj, "carrier_pct");
+
+    // Baseline C0 for Coupling (so C0 on the Left Axis sits at the exact same yZero as 0.0% on the Right Axis!)
+    const c0Base = (coupFit && coupFit.y0 !== null && Number.isFinite(coupFit.y0))
+      ? coupFit.y0
+      : ((coupTr && coupTr.med && Number.isFinite(coupTr.med[0])) ? coupTr.med[0] : 0.15);
+
+    // Align empirical traces so their 0 mM point sits on the shared baseline (preserving full dose-response excursion & IQR width)
+    const alignTraceToOrigin = (tr, targetY0) => {
+      if (!tr || !tr.doses || !tr.med || tr.med.length === 0) return null;
+      const emp0 = Number.isFinite(tr.med[0]) ? tr.med[0] : targetY0;
+      const shift = targetY0 - emp0;
+      return {
+        doses: tr.doses,
+        med: tr.med.map(v => (v !== null && Number.isFinite(v)) ? v + shift : null),
+        q25: (tr.q25 || []).map(v => (v !== null && Number.isFinite(v)) ? v + shift : null),
+        q75: (tr.q75 || []).map(v => (v !== null && Number.isFinite(v)) ? v + shift : null)
+      };
     };
 
-    // Right Y-axis: % Shift (ΔF% and ΔD_amp%) in [-40%, +45%]
-    const yRightToPx = val => {
-      const frac = (val - (-40.0)) / 85.0;
-      return padT + plotH - Math.max(-0.05, Math.min(1.05, frac)) * plotH;
+    const coupTrAligned = alignTraceToOrigin(coupTr, c0Base);
+    const fmTrAligned = alignTraceToOrigin(fmTr, 0.0);
+    const crTrAligned = alignTraceToOrigin(crTr, 0.0);
+
+    // Compute maximum excursions above and below the shared origin (C0 on Left Axis, 0.0% on Right Axis)
+    let leftUp = 0.45;
+    let leftDown = 0.08;
+    const checkLeft = val => {
+      if (val === null || val === undefined || !Number.isFinite(val)) return;
+      const dv = val - c0Base;
+      if (dv > leftUp) leftUp = dv;
+      if (-dv > leftDown) leftDown = -dv;
     };
+    if (coupFit) {
+      checkLeft(coupFit.y0);
+      checkLeft(coupFit.y5mM);
+    }
+    if (coupTrAligned) {
+      coupTrAligned.med.forEach(checkLeft);
+      coupTrAligned.q25.forEach(checkLeft);
+      coupTrAligned.q75.forEach(checkLeft);
+    }
+
+    let rightUp = 24.0;
+    let rightDown = 20.0;
+    const checkRight = val => {
+      if (val === null || val === undefined || !Number.isFinite(val)) return;
+      if (val > rightUp) rightUp = val;
+      if (-val > rightDown) rightDown = -val;
+    };
+    if (fmFit) {
+      checkRight(fmFit.y0);
+      checkRight(fmFit.y5mM);
+    }
+    if (crFit) {
+      checkRight(100.0 * ((crFit.y0 || 1.0) - 1.0));
+      checkRight(100.0 * ((crFit.y5mM || 1.0) - 1.0));
+    }
+    if (fmTrAligned) {
+      fmTrAligned.med.forEach(checkRight);
+      fmTrAligned.q25.forEach(checkRight);
+      fmTrAligned.q75.forEach(checkRight);
+    }
+    if (crTrAligned) {
+      crTrAligned.med.forEach(checkRight);
+      crTrAligned.q25.forEach(checkRight);
+      crTrAligned.q75.forEach(checkRight);
+    }
+
+    // Add 12% headroom so no marker or error bar cap ever touches the border
+    leftUp *= 1.12;
+    leftDown *= 1.12;
+    rightUp *= 1.12;
+    rightDown *= 1.12;
+
+    // Choose shared vertical fraction `zeroFrac` (fraction of plotH below the shared origin line)
+    const needFracLeft = leftDown / Math.max(1e-6, leftUp + leftDown);
+    const needFracRight = rightDown / Math.max(1e-6, rightUp + rightDown);
+    const zeroFrac = Math.max(0.24, Math.min(0.62, Math.max(needFracLeft, needFracRight)));
+
+    const leftSpanAbove = Math.max(leftUp, leftDown * ((1.0 - zeroFrac) / zeroFrac));
+    const leftSpanBelow = leftSpanAbove * (zeroFrac / (1.0 - zeroFrac));
+    const leftMin = c0Base - leftSpanBelow;
+    const leftMax = c0Base + leftSpanAbove;
+
+    const rightSpanAbove = Math.max(rightUp, rightDown * ((1.0 - zeroFrac) / zeroFrac));
+    const rightSpanBelow = rightSpanAbove * (zeroFrac / (1.0 - zeroFrac));
+    const rightMin = -rightSpanBelow;
+    const rightMax = rightSpanAbove;
+
+    const yLeftToPx = val => {
+      const frac = (val - leftMin) / Math.max(1e-9, leftMax - leftMin);
+      return padT + plotH - frac * plotH;
+    };
+    const yRightToPx = val => {
+      const frac = (val - rightMin) / Math.max(1e-9, rightMax - rightMin);
+      return padT + plotH - frac * plotH;
+    };
+
+    // Shared 0 mM baseline pixel `yZero` (identical for yLeftToPx(c0Base) and yRightToPx(0.0)!)
+    const yZero = yRightToPx(0.0);
 
     // Gridlines
     ctx.strokeStyle = "#1e293b";
     ctx.lineWidth = 0.8;
     const xTicks = [0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0];
+    const rightTicks = buildDynamicTicks(rightMin, rightMax, [-25, 0, 25], 0.0);
     ctx.beginPath();
     for (const xt of xTicks) {
       const px = xToPx(xt);
       ctx.moveTo(px, padT);
       ctx.lineTo(px, padT + plotH);
     }
-    for (const yt of [0.0, 0.25, 0.5, 0.75, 1.0]) {
-      const py = yLeftToPx(yt);
+    for (const rt of rightTicks) {
+      const py = yRightToPx(rt);
       ctx.moveTo(padL, py);
       ctx.lineTo(padL + plotW, py);
     }
     ctx.stroke();
 
-    // 0% dashed line on right axis
-    const yZeroPct = yRightToPx(0.0);
-    ctx.strokeStyle = "rgba(251, 191, 36, 0.35)";
-    ctx.setLineDash([3, 3]);
+    // Highlighted shared 0 mM baseline (`C₀` on Left Axis === `0.0%` on Right Axis)
+    ctx.strokeStyle = "rgba(226, 232, 240, 0.45)";
+    ctx.lineWidth = 1.0;
+    ctx.setLineDash([4, 3]);
     ctx.beginPath();
-    ctx.moveTo(padL, yZeroPct);
-    ctx.lineTo(padL + plotW, yZeroPct);
+    ctx.moveTo(padL, yZero);
+    ctx.lineTo(padL + plotW, yZero);
     ctx.stroke();
     ctx.setLineDash([]);
 
@@ -534,44 +818,99 @@
     ctx.rect(padL, padT, plotW, plotH);
     ctx.clip();
 
-    const coupFit = window.extractBinHillParams(binObj, "coupling");
-    const fmFit = window.extractBinHillParams(binObj, "fm_pct");
-    const crFit = window.extractBinHillParams(binObj, "carrier_fold");
-
-    const drawCurve = (fit, mapY, col, dash = [], scalePct = false) => {
-      if (!fit || fit.y0 === null) return;
-      const nSteps = 60;
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 2.3;
-      ctx.setLineDash(dash);
-      ctx.beginPath();
-      for (let k = 0; k <= nSteps; k++) {
-        const frac = k / nSteps;
-        const cVal = Math.pow(10, Math.log10(0.04) + frac * (Math.log10(5.2) - Math.log10(0.04)));
-        const effDose = k === 0 ? 0.0 : cVal;
-        let yVal = evalHill(effDose, fit.y0, fit.dyMax, fit.ec50, fit.nhill);
-        if (scalePct) yVal = 100.0 * (yVal - 1.0);
-        const px = xToPx(cVal);
-        const py = mapY(yVal);
-        if (k === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+    const drawCoDosingSeries = (fit, trAligned, mapY, col, fillRgba, markerType, dash = [], scalePct = false, shiftFitToY0 = null) => {
+      // 1. Empirical IQR ribbon + vertical error bars
+      const pts = [];
+      if (trAligned && trAligned.doses && trAligned.med) {
+        for (let i = 0; i < trAligned.doses.length; i++) {
+          const dVal = trAligned.doses[i];
+          const mVal = trAligned.med[i];
+          if (mVal === null || mVal === undefined || !Number.isFinite(mVal)) continue;
+          const q25Val = (trAligned.q25 && Number.isFinite(trAligned.q25[i])) ? trAligned.q25[i] : mVal;
+          const q75Val = (trAligned.q75 && Number.isFinite(trAligned.q75[i])) ? trAligned.q75[i] : mVal;
+          pts.push({
+            dose: dVal,
+            x: xToPx(dVal),
+            y: mapY(mVal),
+            y25: mapY(q25Val),
+            y75: mapY(q75Val)
+          });
+        }
       }
-      ctx.stroke();
-      ctx.setLineDash([]);
 
-      for (const dVal of [0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0]) {
-        let yVal = evalHill(dVal, fit.y0, fit.dyMax, fit.ec50, fit.nhill);
-        if (scalePct) yVal = 100.0 * (yVal - 1.0);
-        drawMarker(ctx, "circle", xToPx(dVal), mapY(yVal), 2.7, col, "#0f172a");
+      if (pts.length >= 2) {
+        ctx.fillStyle = fillRgba;
+        ctx.beginPath();
+        for (let i = 0; i < pts.length; i++) {
+          if (i === 0) ctx.moveTo(pts[i].x, pts[i].y75);
+          else ctx.lineTo(pts[i].x, pts[i].y75);
+        }
+        for (let i = pts.length - 1; i >= 0; i--) {
+          ctx.lineTo(pts[i].x, pts[i].y25);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // 2. Smooth Hill fit curve starting from the exact shared origin at 0 mM
+      if (fit && fit.y0 !== null && fit.y0 !== undefined) {
+        const startC = isClamped ? 0.18 : 0.04;
+        const nSteps = 60;
+        const baseY0 = shiftFitToY0 !== null ? shiftFitToY0 : fit.y0;
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2.25;
+        ctx.setLineDash(dash);
+        ctx.beginPath();
+        for (let k = 0; k <= nSteps; k++) {
+          const frac = k / nSteps;
+          const cVal = Math.pow(10, Math.log10(startC) + frac * (Math.log10(5.2) - Math.log10(startC)));
+          const effDose = (!isClamped && k === 0) ? 0.0 : cVal;
+          let yVal = evalHill(effDose, baseY0, fit.dyMax, fit.ec50, fit.nhill);
+          if (scalePct) yVal = 100.0 * (yVal - 1.0);
+          const px = xToPx(cVal);
+          const py = mapY(yVal);
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // 3. Draw vertical IQR error bars + empirical markers
+      if (pts.length > 0) {
+        for (const p of pts) {
+          drawErrorBar(ctx, p.x, p.y25, p.y75, col, 0.78, 2.3, 1.15);
+          drawMarker(ctx, markerType, p.x, p.y, 2.8, col, "#0f172a");
+        }
+      } else if (fit && fit.y0 !== null) {
+        const baseY0 = shiftFitToY0 !== null ? shiftFitToY0 : fit.y0;
+        const stdDoses = isClamped ? [0.2, 0.5, 1.0, 2.0, 5.0] : [0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0];
+        for (const dVal of stdDoses) {
+          let yVal = evalHill(dVal, baseY0, fit.dyMax, fit.ec50, fit.nhill);
+          if (scalePct) yVal = 100.0 * (yVal - 1.0);
+          drawMarker(ctx, markerType, xToPx(dVal), mapY(yVal), 2.8, col, "#0f172a");
+        }
       }
     };
 
-    // 1. Coupling C(c) on Left Axis (Cyan #38bdf8)
-    drawCurve(coupFit, yLeftToPx, "#38bdf8", [], false);
+    // 1. Carrier Amp Shift ΔD(c)% on Right Axis (Purple #c084fc)
+    drawCoDosingSeries(crFit, crTrAligned, yRightToPx, "#c084fc", "rgba(192, 132, 252, 0.11)", "square", [4, 3], true, 1.0);
     // 2. Frequency Shift ΔF(c)% on Right Axis (Amber #fbbf24)
-    drawCurve(fmFit, yRightToPx, "#fbbf24", [], false);
-    // 3. Carrier Amp Shift ΔD(c)% on Right Axis (Purple #c084fc)
-    drawCurve(crFit, yRightToPx, "#c084fc", [4, 3], true);
+    drawCoDosingSeries(fmFit, fmTrAligned, yRightToPx, "#fbbf24", "rgba(251, 191, 36, 0.11)", "triangle", [], false, 0.0);
+    // 3. Coupling C(c) on Left Axis (Cyan #38bdf8, anchored at c0Base === yZero)
+    drawCoDosingSeries(coupFit, coupTrAligned, yLeftToPx, "#38bdf8", "rgba(56, 189, 248, 0.14)", "circle", [], false, c0Base);
+
+    // Draw shared origin bullseye at (0 mM, yZero) so the co-dosing anchor is visually unmistakable
+    if (!isClamped) {
+      const x0 = xToPx(0.0);
+      ctx.fillStyle = "#f8fafc";
+      ctx.strokeStyle = "#0f172a";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x0, yZero, 3.8, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+    }
 
     ctx.restore();
 
@@ -579,21 +918,31 @@
     ctx.lineWidth = 1.0;
     ctx.strokeRect(padL, padT, plotW, plotH);
 
-    // Legend inside top-left
-    ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
-    ctx.fillRect(padL + 5, padT + 5, 175, 36);
-    ctx.strokeStyle = "#3b4c73";
-    ctx.strokeRect(padL + 5, padT + 5, 175, 36);
-    ctx.font = "700 8.2px 'JetBrains Mono', Consolas, monospace";
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#38bdf8";
-    ctx.fillText(`— Coupling C(c) [Left Axis]`, padL + 10, padT + 15);
-    ctx.fillStyle = "#fbbf24";
-    ctx.fillText(`— Freq Shift ΔF% [Right Axis]`, padL + 10, padT + 26);
-    ctx.fillStyle = "#c084fc";
-    ctx.fillText(`-- Carrier Amp ΔD% [Right Axis]`, padL + 10, padT + 37);
+    // Legend inside top-left with exact C0 -> C5mM and % values
+    const c5Str = (coupFit && Number.isFinite(coupFit.y5mM)) ? `${c0Base.toFixed(2)}→${coupFit.y5mM.toFixed(2)}` : `C₀=${c0Base.toFixed(2)}`;
+    const fmStr = (fmFit && Number.isFinite(fmFit.y5mM)) ? `${fmFit.y5mM >= 0 ? "+" : ""}${fmFit.y5mM.toFixed(1)}%` : "—";
+    const crPct5 = (crFit && Number.isFinite(crFit.y5mM)) ? 100.0 * (crFit.y5mM - 1.0) : null;
+    const crStr = crPct5 !== null ? `${crPct5 >= 0 ? "+" : ""}${crPct5.toFixed(1)}%` : "—";
 
-    // Ticks
+    const legLines = [
+      { col: "#38bdf8", text: `● Coupling C(c): ${c5Str} [L]` },
+      { col: "#fbbf24", text: `▲ Freq Shift ΔF: ${fmStr} [R]` },
+      { col: "#c084fc", text: `■ Carrier ΔD_amp: ${crStr} [R]` }
+    ];
+    ctx.font = "700 8.0px 'JetBrains Mono', Consolas, monospace";
+    const legW = Math.max(...legLines.map(l => ctx.measureText(l.text).width)) + 10;
+    const legH = 36;
+    ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
+    ctx.fillRect(padL + 4, padT + 4, legW, legH);
+    ctx.strokeStyle = "#3b4c73";
+    ctx.strokeRect(padL + 4, padT + 4, legW, legH);
+    ctx.textAlign = "left";
+    for (let i = 0; i < legLines.length; i++) {
+      ctx.fillStyle = legLines[i].col;
+      ctx.fillText(legLines[i].text, padL + 9, padT + 14 + i * 10.5);
+    }
+
+    // X Ticks
     ctx.fillStyle = "#94a3b8";
     ctx.font = "600 8.5px 'JetBrains Mono', Consolas, monospace";
     ctx.textAlign = "center";
@@ -602,23 +951,38 @@
       ctx.fillText(xTickLabels[i], xToPx(xTicks[i]), padT + plotH + 11);
     }
 
-    // Left ticks (Cyan)
+    // Left Axis Ticks (Cyan: Coupling C(c) aligned at C0)
     ctx.fillStyle = "#38bdf8";
     ctx.textAlign = "right";
-    for (const yt of [0.0, 0.5, 1.0]) {
-      ctx.fillText(yt.toFixed(1), padL - 4, yLeftToPx(yt) + 3);
+    const leftTicks = [
+      c0Base,
+      c0Base + 0.5 * leftSpanAbove,
+      c0Base + 0.9 * leftSpanAbove
+    ];
+    if (leftSpanBelow >= 0.15) {
+      leftTicks.unshift(Math.max(0.0, c0Base - 0.65 * leftSpanBelow));
+    }
+    for (const lt of leftTicks) {
+      const py = yLeftToPx(lt);
+      if (py >= padT + 4 && py <= padT + plotH - 2) {
+        ctx.fillText(lt.toFixed(2), padL - 4, py + 3);
+      }
     }
 
-    // Right ticks (Amber/Purple)
+    // Right Axis Ticks (Amber/Purple: % Shift ΔF% & ΔCarrier% aligned at 0%)
     ctx.fillStyle = "#fbbf24";
     ctx.textAlign = "left";
-    for (const yt of [-30, 0, 30]) {
-      ctx.fillText((yt > 0 ? "+" : "") + yt + "%", padL + plotW + 4, yRightToPx(yt) + 3);
+    for (const rt of rightTicks) {
+      const py = yRightToPx(rt);
+      if (py >= padT + 4 && py <= padT + plotH - 2) {
+        const lbl = (rt > 0 ? "+" : "") + Math.round(rt) + "%";
+        ctx.fillText(lbl, padL + plotW + 4, py + 3);
+      }
     }
 
     ctx.fillStyle = "#cbd5e1";
     ctx.font = "600 9px Inter, Arial, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(`Bin (${bx}, ${by}) Joint Dose-Response [Bt₂cAMP mM]`, padL + plotW / 2, cssH - 3);
+    ctx.fillText(`Bin (${bx}, ${by}) Co-Dosing [Shared 0mM Origin · IQR Bars]`, padL + plotW / 2, cssH - 3);
   };
 })();

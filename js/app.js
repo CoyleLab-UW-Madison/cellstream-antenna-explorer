@@ -1,13 +1,18 @@
 /**
  * app.js
- * Main controller for the Cellstream Antenna-Circuit Explorer (Dark-Slate H9 Atlas Edition).
- * Modes:
- *   1. Single-Circuit Inspector ("single")
- *   2. 3×3 Family Explorer ("family3x3")
- *   3. Full 4×(3×3) Library ("library6x6")
- *   4. Side-by-Side Comparator ("pairwise")
- *   5. Target Response Finder ("target")
- *   6. Sortable 38-Construct Table ("table")
+ * Main controller for the Cellstream Antenna-Circuit Explorer.
+ * Layout:
+ *   - Top Line HUD Bar (`#hud-telemetry`): Active construct summary & live clicked-bin telemetry
+ *   - Left Sidebar (`#sidebar-controls` + `#sidebar-architecture`): Smart pulldown selectors,
+ *     segmented toggles, and pinned Active Architecture molecular schematic
+ *   - Right Main Viewing Area (`#main-viewer` -> `#view-container`):
+ *       1. Single-Circuit Inspector ("single" — defaults to 2×2 Dashboard: Portrait, 4-Quad+Bin Curve,
+ *          Fit Information Table, and Clicked-Bin Co-Dosing Curve; also supports All 9 Portraits 3×3 & All 6 Curves)
+ *       2. 3×3 Family Explorer ("family3x3")
+ *       3. Full 4×(3×3) Library ("library6x6")
+ *       4. Side-by-Side Circuit Comparator ("pairwise")
+ *       5. Target Response Finder ("target")
+ *       6. Sortable 38-Construct Summary Table ("table")
  */
 
 (function() {
@@ -20,11 +25,11 @@
   const CONSTRUCTS = DATA.constructs;
 
   const FAMILIES = [
-    { id: "WT_upright",   mutation: "WT",    topology: "upright", label: "WT Upright",   pillClass: "fam-wt-upr",   badgeClass: "badge-wt-upr",   subtitle: "FHA1(WT) on MinD Carrier | PKAsub on Diffusive Cargo" },
-    { id: "WT_inverse",   mutation: "WT",    topology: "inverse", label: "WT Inverse",   pillClass: "fam-wt-inv",   badgeClass: "badge-wt-inv",   subtitle: "PKAsub on MinD Carrier | FHA1(WT) on Diffusive Cargo" },
-    { id: "R70A_upright", mutation: "R70A",  topology: "upright", label: "R70A Upright", pillClass: "fam-r70a-upr", badgeClass: "badge-r70a-upr", subtitle: "FHA1(R70A) Weak Reader on MinD | PKAsub on Cargo" },
-    { id: "R70A_inverse", mutation: "R70A",  topology: "inverse", label: "R70A Inverse", pillClass: "fam-r70a-inv", badgeClass: "badge-r70a-inv", subtitle: "PKAsub on MinD Carrier | FHA1(R70A) Weak Reader on Cargo" },
-    { id: "TAmut_ctrl",   mutation: "TAmut", topology: "inverse", label: "T→A Controls", pillClass: "fam-tamut",    badgeClass: "badge-tamut",    subtitle: "Non-Phosphorylatable PKAsub(T→A) Negative Controls (1×1 & 2×2 Inverse)" }
+    { id: "WT_upright",   mutation: "WT",    topology: "upright", label: "WT Upright",   badgeClass: "badge-wt-upr",   subtitle: "FHA1(WT) on MinD Carrier | PKAsub on Diffusive GFP Cargo" },
+    { id: "WT_inverse",   mutation: "WT",    topology: "inverse", label: "WT Inverse",   badgeClass: "badge-wt-inv",   subtitle: "PKAsub on MinD Carrier | FHA1(WT) on Diffusive GFP Cargo" },
+    { id: "R70A_upright", mutation: "R70A",  topology: "upright", label: "R70A Upright", badgeClass: "badge-r70a-upr", subtitle: "FHA1(R70A) Weak Reader on MinD | PKAsub on GFP Cargo" },
+    { id: "R70A_inverse", mutation: "R70A",  topology: "inverse", label: "R70A Inverse", badgeClass: "badge-r70a-inv", subtitle: "PKAsub on MinD Carrier | FHA1(R70A) Weak Reader on GFP Cargo" },
+    { id: "TAmut_ctrl",   mutation: "TAmut", topology: "inverse", label: "T→A Controls", badgeClass: "badge-tamut",    subtitle: "Non-Phosphorylatable PKAsub(T→A) Negative Controls (1×1 & 2×2 Inverse)" }
   ];
 
   const VALENCIES_9 = ["1x1", "1x2", "1x3", "2x1", "2x2", "2x3", "3x1", "3x2", "3x3"];
@@ -36,16 +41,15 @@
 
   const state = {
     mode: "single",                 // "single" | "family3x3" | "library6x6" | "pairwise" | "target" | "table"
-    familyId: "WT_upright",
+    familyId: "WT_inverse",
     valency: "2x2",
-    selectedCircuitA: "2x2_WT_upright",
-    selectedCircuitB: "2x2_WT_inverse",
+    selectedCircuitA: "2x2_WT_inverse",
+    selectedCircuitB: "2x2_WT_upright",
 
-    // Display & Focus state (modeled after H9_FOV_Physiology_Atlas_Viewer.html)
-    focus: "all_portraits",         // "all_portraits" | "all_quads" | "pair_metrics" | "m_coup_5mM" | "m_coup_y0" | ...
+    // Single-Circuit sub-view layout ("dashboard_2x2" matches the user's mockup!)
+    focus: "dashboard_2x2",         // "dashboard_2x2" | "all_portraits" | "all_quads" | "pair_metrics"
     pairMetricLeft: "coup_5mM",
     pairMetricRight: "fm_5mM_pct",
-    zoomPx: 440,
     scalePct: 100,                  // User scale multiplier (65% to 140%) on top of viewport-adaptive sizing
 
     // Global plot settings
@@ -56,7 +60,7 @@
     confidenceMode: "vsup_contour", // "vsup_contour" | "vsup_only" | "raw"
 
     // Interactive Clicked-Bin state (persists & updates live without layout jump)
-    selectedBin: { bx: 2, by: 7, quadrant: "Q1_Slow_HiLoad" },
+    selectedBin: { bx: 5, by: 5, quadrant: "Q2_Fast_HiLoad" },
 
     // Mode 5: Target Finder state
     targetPresetId: "all_quad_tracker",
@@ -135,46 +139,54 @@
   }
 
   /**
-   * Computes viewport-adaptive (w, h) logical pixel dimensions for canvases so that
-   * 3×3 grids and 6×6 super-grids automatically fit the user's browser window size!
+   * Computes viewport-adaptive (w, h) logical pixel dimensions for canvases inside `#main-viewer`
+   * (accounting for the 300px Left Sidebar and 54px Top HUD bar).
    */
-  function getAdaptiveTileSize(kind = "grid3x3") {
-    const vw = window.innerWidth || 1440;
-    const vh = window.innerHeight || 900;
+  function getAdaptiveTileSize(kind = "dashboard2x2") {
+    const vw = Math.max(640, (window.innerWidth || 1440) - 335);
+    const vh = Math.max(500, (window.innerHeight || 900) - 74);
     const sc = (state.scalePct || 100) / 100.0;
 
+    if (kind === "dashboard2x2") {
+      // 2x2 grid in Single-Circuit Inspector: 2 columns wide, 2 rows tall
+      const availW = Math.floor((vw - 60) / 2.08);
+      const availH = Math.floor((vh - 140) / 2.05);
+      const baseH = Math.max(195, Math.min(310, Math.min(availH, Math.round(availW * 0.78))));
+      const baseW = Math.round(baseH * 1.24);
+      return { w: Math.round(baseW * sc), h: Math.round(baseH * sc) };
+    }
     if (kind === "family3x3") {
-      // Fit 3 rows + headers comfortably inside viewport height & width
-      const availW = Math.floor((vw - 180) / 3.25);
-      const availH = Math.floor((vh - 235) / 3.0) - 34;
-      const baseH = Math.max(135, Math.min(225, Math.min(availH, Math.round(availW * 0.82))));
+      // Fit 3 rows + headers comfortably inside main viewer height & width
+      const availW = Math.floor((vw - 110) / 3.15);
+      const availH = Math.floor((vh - 125) / 3.0) - 30;
+      const baseH = Math.max(135, Math.min(220, Math.min(availH, Math.round(availW * 0.82))));
       const baseW = Math.round(baseH * 1.22);
       return { w: Math.round(baseW * sc), h: Math.round(baseH * sc) };
     }
     if (kind === "single3x3") {
       // 3x3 grid of 9 phase portraits or 6 quadrant curves in Single-Circuit mode
-      const availW = Math.floor((vw - 120) / 3.25);
-      const availH = Math.floor((vh - 250) / 2.85) - 46;
-      const baseH = Math.max(145, Math.min(215, Math.min(availH, Math.round(availW * 0.83))));
+      const availW = Math.floor((vw - 60) / 3.15);
+      const availH = Math.floor((vh - 110) / 3.0) - 42;
+      const baseH = Math.max(135, Math.min(210, Math.min(availH, Math.round(availW * 0.83))));
       const baseW = Math.round(baseH * 1.20);
       return { w: Math.round(baseW * sc), h: Math.round(baseH * sc) };
     }
     if (kind === "library6x6") {
       // 6 columns across (2 superquads x 3 cols)
-      const availW = Math.floor((vw - 150) / 6.4);
-      const availH = Math.floor((vh - 240) / 4.8);
-      const baseW = Math.max(125, Math.min(195, Math.min(availW, Math.round(availH * 1.22))));
+      const availW = Math.floor((vw - 80) / 6.3);
+      const availH = Math.floor((vh - 165) / 4.8);
+      const baseW = Math.max(115, Math.min(185, Math.min(availW, Math.round(availH * 1.22))));
       const baseH = Math.round(baseW * 0.81);
       return { w: Math.round(baseW * sc), h: Math.round(baseH * sc) };
     }
-    if (kind === "zoomed") {
-      const availW = Math.floor((vw - 140) / 2.2);
-      const availH = Math.floor(vh - 290);
-      const baseW = Math.max(290, Math.min(460, Math.min(availW, Math.round(availH * 1.16))));
-      const baseH = Math.round(baseW * 0.84);
+    if (kind === "pairwise3col") {
+      const availW = Math.floor((vw - 70) / 3.15);
+      const availH = Math.floor((vh - 180) / 2.2);
+      const baseW = Math.max(220, Math.min(340, Math.min(availW, Math.round(availH * 1.22))));
+      const baseH = Math.round(baseW * 0.82);
       return { w: Math.round(baseW * sc), h: Math.round(baseH * sc) };
     }
-    return { w: Math.round(240 * sc), h: Math.round(200 * sc) };
+    return { w: Math.round(260 * sc), h: Math.round(210 * sc) };
   }
 
   // Tooltip manager for 2D Phase Portrait bins
@@ -187,8 +199,10 @@
       return;
     }
     const { bx, by, bin, inCore, construct } = info;
-    const xRanges = DATA.grid_axes.x_bins[bx] || [0, 0];
-    const yRanges = DATA.grid_axes.y_bins[by] || [0, 0];
+    const xEdges = (DATA.grid_spec && DATA.grid_spec.x_edges) || [-0.32, -0.256, -0.192, -0.128, -0.064, 0, 0.064, 0.128, 0.192, 0.256, 0.32];
+    const yEdges = (DATA.grid_spec && DATA.grid_spec.y_edges) || [-0.42, -0.336, -0.252, -0.168, -0.084, 0, 0.084, 0.168, 0.252, 0.336, 0.42];
+    const xRanges = [xEdges[bx] ?? 0, xEdges[bx + 1] ?? 0];
+    const yRanges = [yEdges[by] ?? 0, yEdges[by + 1] ?? 0];
     const qLabel = bx < 5
       ? (by >= 5 ? "Q1: Slow (Hi D/E) + Hi Load" : "Q3: Slow (Hi D/E) + Lo Load")
       : (by >= 5 ? "Q2: Fast (Hi E/D) + Hi Load" : "Q4: Fast (Hi E/D) + Lo Load");
@@ -227,703 +241,382 @@
   }
 
   /**
-   * Updates the Live Clicked-Bin Dose-Response Inspector Dock AND redraws the cyan bin highlight
-   * on all visible phase portrait canvases in-place (NO full DOM rebuild or scroll jump!).
+   * 1. Renders the Top Line HUD Bar (`#hud-telemetry`)
    */
-  function updateClickedBinLive(clickedInfo) {
-    if (clickedInfo) {
-      state.selectedBin = {
-        bx: clickedInfo.bx,
-        by: clickedInfo.by,
-        quadrant: clickedInfo.quadrant
-      };
-      if (clickedInfo.metricSpec) {
-        state.portraitMetricKey = clickedInfo.metricSpec.key;
-        if (clickedInfo.metricSpec.quadCurveKey) {
-          state.quadMetricKey = clickedInfo.metricSpec.quadCurveKey;
-        }
-      }
-    }
+  function renderTopHud() {
+    const hudEl = document.getElementById("hud-telemetry");
+    if (!hudEl) return;
 
-    const c = CONSTRUCTS[state.selectedCircuitA] || CONSTRUCTS["2x2_WT_upright"];
+    const c = CONSTRUCTS[state.selectedCircuitA] || CONSTRUCTS["2x2_WT_inverse"];
+    const gs = c.global_summary || {};
+    const badgeCls = getBadgeClassForConstruct(c);
     const bx = state.selectedBin.bx;
     const by = state.selectedBin.by;
     const binObj = (c.bins_2d || []).find(b => b.bx === bx && b.by === by);
-    const qSpec = window.QUADRANT_METRIC_MAP[state.quadMetricKey] || window.QUADRANT_METRICS[0];
+    const qShort = bx < 5 ? (by >= 5 ? "Q1" : "Q3") : (by >= 5 ? "Q2" : "Q4");
 
-    // 1. Update text readout inside #bin-inspector-readout if present
-    const readoutEl = document.getElementById("bin-inspector-readout");
-    if (readoutEl) {
-      const qLabel = bx < 5
-        ? (by >= 5 ? "Q1: Slow (Hi D/E) + Hi Load" : "Q3: Slow (Hi D/E) + Lo Load")
-        : (by >= 5 ? "Q2: Fast (Hi E/D) + Hi Load" : "Q4: Fast (Hi E/D) + Lo Load");
-
-      if (!binObj) {
-        readoutEl.innerHTML = `
-          <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px;">
-            Clicked Stoichiometry Bin: (bx = ${bx}, by = ${by}) — ${qLabel}
-          </div>
-          <div style="color:#f87171;font-family:var(--font-mono);font-size:12px;">
-            This stoichiometry bin is unpopulated or non-oscillating in ${c.valency} ${c.mutation} ${c.topology}. Click any colored bin on a 2D Phase Portrait to view its fitted Hill dose-response curves.
-          </div>
-        `;
-      } else {
-        readoutEl.innerHTML = `
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <span style="font-size:13px;font-weight:700;color:var(--accent);">
-              Clicked Bin (${bx}, ${by}) Dose-Response Inspector
-            </span>
-            <span class="badge ${getBadgeClassForConstruct(c)}">${qLabel.split(":")[0]}</span>
-          </div>
-          <div style="font-family:var(--font-mono);font-size:11.5px;line-height:1.6;color:var(--text);">
-            <div><span style="color:var(--muted);">Coords:</span> Δlog₁₀(E/D)=<strong>${formatNum(binObj.x, 2, "", true)}</strong>, Δlog₁₀(Cargo/D)=<strong>${formatNum(binObj.y, 2, "", true)}</strong></div>
-            <div><span style="color:var(--muted);">Coupling C(c):</span> <strong>${formatNum(binObj.coup_y0, 2)} → ${formatNum(binObj.coup_5mM, 2)}</strong> (ΔC=<strong>${formatNum(binObj.coup_dy, 2, "", true)}</strong>, EC₅₀=<strong>${formatNum(binObj.coup_ec50, 2, "mM")}</strong>, R²=${formatNum(binObj.coup_r2, 2)})</div>
-            <div><span style="color:var(--muted);">Freq Shift ΔF(c):</span> <strong style="color:#fbbf24;">${formatNum(binObj.fm_5mM_pct, 1, "%", true)}</strong> (EC₅₀=${formatNum(binObj.fm_ec50, 2, "mM")}, R²=${formatNum(binObj.fm_r2, 2)})</div>
-            <div><span style="color:var(--muted);">Carrier Amp ΔD(c):</span> <strong style="color:#c084fc;">${formatNum(binObj.cr_5mM_pct, 1, "%", true)}</strong> (${formatNum(binObj.cr_5mM_fold, 2, "×")})</div>
-            <div><span style="color:var(--muted);">Loading / AM Fold:</span> <strong>${formatNum(binObj.load_5mM_fold, 2, "×")}</strong> / <strong>${formatNum(binObj.am_5mM_fold, 2, "×")}</strong></div>
-            <div><span style="color:var(--muted);">Osc Penetrance:</span> ${formatNum(binObj.osc_y0_pct, 1, "%")} → ${formatNum(binObj.osc_5mM_pct, 1, "%")} (ΔOsc=<strong>${formatNum(binObj.osc_dy_pct, 1, "%", true)}</strong>)</div>
-          </div>
-          <div style="margin-top:8px;font-size:11px;color:var(--muted);">
-            💡 <em>Click any bin $(bx, by)$ on any 2D Phase Portrait below to immediately plot its dose-response curve on the right!</em>
-          </div>
-        `;
-      }
-    }
-
-    // 2. Update the two live canvases inside the Bin Inspector Dock
-    const dockQuadCvs = document.getElementById("dock-quad-plus-bin-canvas");
-    if (dockQuadCvs) {
-      window.renderQuadrantDoseCurveCanvas(dockQuadCvs, c, {
-        dataSource: state.dataSource,
-        metricKey: state.quadMetricKey,
-        showAxesLabels: true,
-        showAnnotationBox: true,
-        selectedBin: state.selectedBin
-      });
-    }
-    const dockTitleEl = document.getElementById("dock-quad-title");
-    if (dockTitleEl) {
-      dockTitleEl.textContent = `${qSpec.shortLabel}: 4 Quadrants + Bin (${bx}, ${by}) [Cyan Curve]`;
-    }
-
-    const dockMultiCvs = document.getElementById("dock-bin-multi-canvas");
-    if (dockMultiCvs) {
-      window.renderSingleBinMultiCurveCanvas(dockMultiCvs, c, bx, by);
-    }
-
-    // 3. Also update the large zoomed quadrant canvas if currently in zoomed mode
-    const zoomedQuadCvs = document.getElementById("zoomed-quad-canvas");
-    if (zoomedQuadCvs) {
-      window.renderQuadrantDoseCurveCanvas(zoomedQuadCvs, c, {
-        dataSource: state.dataSource,
-        metricKey: state.quadMetricKey,
-        showAxesLabels: true,
-        showAnnotationBox: true,
-        selectedBin: state.selectedBin
-      });
-    }
-
-    // 4. Redraw all currently mounted 2D phase portrait canvases in-place so the cyan highlight box moves to (bx, by)
-    document.querySelectorAll("canvas.live-portrait-canvas").forEach(cvs => {
-      const meta = cvs._portraitMeta;
-      if (meta && meta.construct && meta.metricSpec) {
-        window.renderPhasePortraitCanvas(cvs, meta.construct, meta.metricSpec, {
-          confidenceMode: state.confidenceMode,
-          showAxesLabels: cvs.dataset.axes === "true",
-          showSummaryBadge: true,
-          highlightBin: (meta.construct.id === c.id) ? state.selectedBin : null
-        });
-      }
-    });
+    hudEl.innerHTML = `
+      <div class="hud-chip" style="border-color:#3b4c73;">
+        <span class="hud-chip-lbl">Active Circuit</span>
+        <span class="hud-chip-val">
+          <span class="badge ${badgeCls}" style="margin-right:4px;">${c.valency} ${c.mutation} ${c.topology.toUpperCase()}</span>
+          <span style="color:var(--muted);font-size:10.5px;">${c.plasmids}</span>
+        </span>
+      </div>
+      <div class="hud-chip">
+        <span class="hud-chip-lbl">Coupling C₀ → C₅ₘₘ (ΔC)</span>
+        <span class="hud-chip-val">
+          <span style="color:#fbbf24;">${c.is_clamped_0mM ? "Clamp" : formatNum(gs.c0_basal, 2)}</span>
+          → <span style="color:#38bdf8;">${formatNum(gs.c5mM_sat, 2)}</span>
+          <span style="color:#34d399;font-size:11px;">(${formatNum(gs.delta_coup, 2, "", true)})</span>
+        </span>
+      </div>
+      <div class="hud-chip">
+        <span class="hud-chip-lbl">Clock F₀ | 5mM ΔF%</span>
+        <span class="hud-chip-val">
+          ${formatNum(gs.f0_mHz, 1, "mHz")} |
+          <span style="color:${(gs.fm_5mM_pct || 0) >= 0 ? "#f87171" : "#60a5fa"};">${formatNum(gs.fm_5mM_pct, 1, "%", true)}</span>
+        </span>
+      </div>
+      <div class="hud-chip">
+        <span class="hud-chip-lbl">5mM Carrier ΔD_amp</span>
+        <span class="hud-chip-val" style="color:#c084fc;">${formatNum(gs.cr_5mM_pct, 1, "%", true)}</span>
+      </div>
+      <div class="hud-chip">
+        <span class="hud-chip-lbl">Active Cells (0→5mM)</span>
+        <span class="hud-chip-val">${formatNum(gs.active_cells_0mM_pct, 0, "%")} → <span style="color:#34d399;">${formatNum(gs.active_cells_5mM_pct, 0, "%")}</span></span>
+      </div>
+      <div class="hud-chip" style="border-color:var(--accent);">
+        <span class="hud-chip-lbl" style="color:var(--accent);">Clicked Bin (${bx}, ${by}) · ${qShort}</span>
+        <span class="hud-chip-val" id="hud-bin-readout" style="color:#38bdf8;">
+          ${binObj ? `C: ${formatNum(binObj.coup_y0, 2)}→${formatNum(binObj.coup_5mM, 2)} | ΔF: ${formatNum(binObj.fm_5mM_pct, 1, "%", true)}` : "Unpopulated Bin"}
+        </span>
+      </div>
+    `;
   }
 
   /**
-   * Renders Row 1 (`#controls-bar`) and Row 2 (`#focus-bar`) modeled after H9_FOV_Physiology_Atlas_Viewer.html.
+   * 2. Renders the Left Sidebar (`#sidebar-controls` + `#sidebar-architecture`)
+   *    using clean pulldowns and toggles, plus the pinned Active Architecture schematic at bottom!
    */
-  function renderControlBars() {
-    // Update active mode button in header
-    document.querySelectorAll(".mode-btn").forEach(btn => {
-      btn.classList.toggle("active", btn.dataset.mode === state.mode);
-    });
+  function renderSidebar() {
+    const sbCtrl = document.getElementById("sidebar-controls");
+    const sbArch = document.getElementById("sidebar-architecture");
+    if (!sbCtrl || !sbArch) return;
 
-    const controlsBar = document.getElementById("controls-bar");
-    const focusBar = document.getElementById("focus-bar");
-    if (!controlsBar || !focusBar) return;
-
+    const c = CONSTRUCTS[state.selectedCircuitA] || CONSTRUCTS["2x2_WT_inverse"];
     const allConstructs = getOrderedConstructs(true);
 
-    // Build Row 1: Family pills, Valency pills, Data Unit pills, Zone Contour pills
-    let ctrlHTML = `
-      <div class="ctrl-group">
-        <span class="ctrl-label">Family:</span>
-        ${FAMILIES.map(f => `
-          <button class="pill-btn ${f.pillClass} ${state.familyId === f.id ? "active" : ""}" data-set-family="${f.id}" title="${f.subtitle}">
-            ${f.label}
-          </button>
-        `).join("")}
-      </div>
-    `;
-
-    if (state.familyId !== "TAmut_ctrl") {
-      ctrlHTML += `
-        <div class="ctrl-group">
-          <span class="ctrl-label">Valency (MinD×Cargo):</span>
-          ${VALENCIES_9.map(v => `
-            <button class="pill-btn ${state.valency === v ? "active" : ""}" data-set-valency="${v}">
-              ${v}
-            </button>
-          `).join("")}
-        </div>
+    // Build configuration options for current family
+    let configOptionsHTML = "";
+    if (state.familyId === "TAmut_ctrl") {
+      configOptionsHTML = `
+        <option value="1x1_TAmut_inverse" ${state.selectedCircuitA === "1x1_TAmut_inverse" ? "selected" : ""}>1×1 T→A Inverse (pCL334)</option>
+        <option value="2x2_TAmut_inverse" ${state.selectedCircuitA === "2x2_TAmut_inverse" ? "selected" : ""}>2×2 T→A Inverse (pCL335)</option>
       `;
     } else {
-      ctrlHTML += `
-        <div class="ctrl-group">
-          <span class="ctrl-label">T→A Control Construct:</span>
-          <button class="pill-btn ${state.selectedCircuitA === "1x1_TAmut_inverse" ? "active" : ""}" data-set-cid="1x1_TAmut_inverse">1×1 T→A Inverse (pCL334)</button>
-          <button class="pill-btn ${state.selectedCircuitA === "2x2_TAmut_inverse" ? "active" : ""}" data-set-cid="2x2_TAmut_inverse">2×2 T→A Inverse (pCL335)</button>
-        </div>
-      `;
+      const fam = FAMILIES.find(f => f.id === state.familyId) || FAMILIES[0];
+      configOptionsHTML = VALENCIES_9.map(v => {
+        const [md, cg] = v.split("x");
+        const cid = `${v}_${fam.mutation}_${fam.topology}`;
+        const cObj = CONSTRUCTS[cid];
+        const c5 = cObj?.global_summary?.c5mM_sat;
+        const c5Txt = (c5 !== null && c5 !== undefined) ? ` — C₅ₘₘ=${c5.toFixed(2)}` : "";
+        return `<option value="${v}" ${state.valency === v ? "selected" : ""}>${v} (${md}×MinD : ${cg}×Cargo)${c5Txt}</option>`;
+      }).join("");
     }
 
-    ctrlHTML += `
-      <div class="ctrl-group">
-        <span class="ctrl-label">4-Quad Unit:</span>
-        <button class="pill-btn ${state.dataSource === "pixel" ? "active" : ""}" data-set-source="pixel" title="64×64 Superpixel Wave Voxels">Pixel-Voxel</button>
-        <button class="pill-btn ${state.dataSource === "cell" ? "active" : ""}" data-set-source="cell" title="Single-Cell ultrack Masks (1 Cell = 1 Vote)">ultrack Cell-Mask</button>
-      </div>
-
-      <div class="ctrl-group">
-        <span class="ctrl-label">Zone Filter:</span>
-        <button class="pill-btn ${state.confidenceMode === "vsup_contour" ? "active" : ""}" data-set-conf="vsup_contour">Black Contour ON</button>
-        <button class="pill-btn ${state.confidenceMode === "vsup_only" ? "active" : ""}" data-set-conf="vsup_only">Contour OFF</button>
-        <button class="pill-btn ${state.confidenceMode === "raw" ? "active" : ""}" data-set-conf="raw">Raw</button>
-      </div>
-
-      <div class="kb-hint">
-        Keys: <strong>1–4</strong> Family | <strong>←/→</strong> Valency | <strong>↑/↓</strong> Metric | <strong>C</strong> Contour | <strong>M</strong> Pixel/Cell
-      </div>
-    `;
-
-    controlsBar.innerHTML = ctrlHTML;
-
-    // Build Row 2 (`#focus-bar`) depending on active mode
-    const scaleCtrlHTML = `
-      <div class="ctrl-group" style="margin-left:auto;">
-        <span class="ctrl-label">Grid / Plot Scale:</span>
-        <input type="range" id="slider-scale-pct" min="65" max="140" step="5" value="${state.scalePct}" style="width:95px;accent-color:var(--accent);" title="Scale plots relative to browser window size" />
-        <span id="scale-pct-label" style="font-size:11.5px;color:var(--accent);font-weight:700;font-family:var(--font-mono);">${state.scalePct}%</span>
-      </div>
-    `;
-
-    let focusHTML = "";
+    // Sub-view pulldown or plot-type toggle depending on mode
+    let subViewControlHTML = "";
     if (state.mode === "single") {
-      focusHTML = `
-        <span class="ctrl-label" style="color:#c084fc;">Display / Focus View:</span>
-        <button class="pill-btn focus-special ${state.focus === "all_portraits" ? "active" : ""}" data-set-focus="all_portraits">
-          All 9 Portraits (3×3 Grid)
-        </button>
-        <button class="pill-btn focus-special ${state.focus === "all_quads" ? "active" : ""}" data-set-focus="all_quads">
-          All 6 Dose-Response Curves (4-Quad)
-        </button>
-        <button class="pill-btn focus-special ${state.focus === "pair_metrics" ? "active" : ""}" data-set-focus="pair_metrics">
-          Side-by-Side Metric Pair (Pick 2)
-        </button>
-        <span style="color:var(--border);margin:0 4px;">|</span>
-        <span class="ctrl-label" style="color:#38bdf8;">Zoom Single Portrait (+ 4-Quad Curve):</span>
-        ${window.PORTRAIT_METRICS.map((m, idx) => `
-          <button class="pill-btn ${state.focus === "m_" + m.key ? "active" : ""}" data-set-focus="m_${m.key}">
-            ${idx + 1}. ${m.shortLabel.split(" (")[0]}
-          </button>
-        `).join("")}
-        ${scaleCtrlHTML}
+      subViewControlHTML = `
+        <div class="sb-group">
+          <div class="sb-label"><span>Single-Viewer Layout</span></div>
+          <select id="sb-sel-focus" class="sb-select">
+            <option value="dashboard_2x2" ${state.focus === "dashboard_2x2" ? "selected" : ""}>2×2 Inspector Dashboard (Default)</option>
+            <option value="all_portraits" ${state.focus === "all_portraits" ? "selected" : ""}>All 9 Phase Portraits (3×3 Grid)</option>
+            <option value="all_quads" ${state.focus === "all_quads" ? "selected" : ""}>All 6 Quadrant Dose Curves (3×2)</option>
+            <option value="pair_metrics" ${state.focus === "pair_metrics" ? "selected" : ""}>Side-by-Side Metric Pair (2 Portraits)</option>
+          </select>
+        </div>
       `;
     } else if (state.mode === "family3x3" || state.mode === "library6x6") {
-      focusHTML = `
-        <span class="ctrl-label" style="color:#c084fc;">Plot Type:</span>
-        <button class="pill-btn focus-special ${state.viewType === "portraits" ? "active" : ""}" data-set-viewtype="portraits">
-          2D Stoichiometry Phase Portraits
-        </button>
-        <button class="pill-btn focus-special ${state.viewType === "quadrants" ? "active" : ""}" data-set-viewtype="quadrants">
-          4-Quadrant Dose-Response Curves (0–5 mM)
-        </button>
-        <span style="color:var(--border);margin:0 4px;">|</span>
+      subViewControlHTML = `
+        <div class="sb-group">
+          <div class="sb-label"><span>Matrix Plot Representation</span></div>
+          <div class="sb-seg-row">
+            <button class="sb-seg-btn ${state.viewType === "portraits" ? "active" : ""}" data-sb-viewtype="portraits">2D Phase Portraits</button>
+            <button class="sb-seg-btn ${state.viewType === "quadrants" ? "active" : ""}" data-sb-viewtype="quadrants">4-Quad Dose Curves</button>
+          </div>
+        </div>
       `;
-      if (state.viewType === "portraits") {
-        focusHTML += `
-          <span class="ctrl-label" style="color:#38bdf8;">Select 2D Metric:</span>
-          ${window.PORTRAIT_METRICS.map((m, idx) => `
-            <button class="pill-btn ${state.portraitMetricKey === m.key ? "active" : ""}" data-set-pmetric="${m.key}">
-              ${idx + 1}. ${m.shortLabel}
-            </button>
-          `).join("")}
-        `;
-      } else {
-        focusHTML += `
-          <span class="ctrl-label" style="color:#38bdf8;">Select 4-Quadrant Curve Metric:</span>
-          ${window.QUADRANT_METRICS.map((m, idx) => `
-            <button class="pill-btn ${state.quadMetricKey === m.key ? "active" : ""}" data-set-qmetric="${m.key}">
-              ${idx + 1}. ${m.shortLabel}
-            </button>
-          `).join("")}
-        `;
-      }
-      focusHTML += scaleCtrlHTML;
     } else if (state.mode === "pairwise") {
-      focusHTML = `
-        <div class="ctrl-group">
-          <span class="ctrl-label" style="color:#60a5fa;">Circuit A (Left):</span>
-          <select id="sel-pair-circuit-a" class="dark-select">
-            ${allConstructs.map(c => `<option value="${c.id}" ${c.id === state.selectedCircuitA ? "selected" : ""}>${c.valency} ${c.mutation} ${c.topology.toUpperCase()} (${c.design_id})</option>`).join("")}
+      subViewControlHTML = `
+        <div class="sb-group">
+          <div class="sb-label">
+            <span style="color:#f87171;">Compare Against (Circuit B)</span>
+            <button class="zoom-btn-mini" id="sb-btn-swap-pair" title="Swap Circuit A and Circuit B">⇄ Swap</button>
+          </div>
+          <select id="sb-sel-circuit-b" class="sb-select">
+            ${allConstructs.map(cb => `<option value="${cb.id}" ${cb.id === state.selectedCircuitB ? "selected" : ""}>${cb.valency} ${cb.mutation} ${cb.topology.toUpperCase()} (${cb.design_id})</option>`).join("")}
           </select>
         </div>
-        <div class="ctrl-group">
-          <span class="ctrl-label" style="color:#f87171;">Circuit B (Right):</span>
-          <select id="sel-pair-circuit-b" class="dark-select">
-            ${allConstructs.map(c => `<option value="${c.id}" ${c.id === state.selectedCircuitB ? "selected" : ""}>${c.valency} ${c.mutation} ${c.topology.toUpperCase()} (${c.design_id})</option>`).join("")}
-          </select>
-        </div>
-        <button class="pill-btn" id="btn-swap-circuits">⇄ Swap A &amp; B</button>
-        <span style="color:var(--border);margin:0 4px;">|</span>
-        <span class="ctrl-label" style="color:#38bdf8;">Metric:</span>
-        ${window.PORTRAIT_METRICS.map((m, idx) => `
-          <button class="pill-btn ${state.portraitMetricKey === m.key ? "active" : ""}" data-set-pmetric="${m.key}">
-            ${idx + 1}. ${m.shortLabel.split(" (")[0]}
-          </button>
-        `).join("")}
-        ${scaleCtrlHTML}
-      `;
-    } else {
-      focusHTML = `
-        <span class="ctrl-label" style="color:#38bdf8;">Reference 2D Portrait Metric:</span>
-        ${window.PORTRAIT_METRICS.map((m, idx) => `
-          <button class="pill-btn ${state.portraitMetricKey === m.key ? "active" : ""}" data-set-pmetric="${m.key}">
-            ${idx + 1}. ${m.shortLabel}
-          </button>
-        `).join("")}
-        ${scaleCtrlHTML}
       `;
     }
 
-    focusBar.innerHTML = focusHTML;
+    sbCtrl.innerHTML = `
+      <div class="sb-section-title">
+        <span>1. Navigation &amp; Selection</span>
+        <span style="color:var(--muted);font-family:var(--font-mono);font-size:10px;">38 Constructs</span>
+      </div>
 
-    // Bind events in controlsBar & focusBar
-    controlsBar.querySelectorAll("[data-set-family]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.familyId = btn.dataset.setFamily;
+      <div class="sb-group">
+        <div class="sb-label"><span>Explorer View Mode</span></div>
+        <select id="sb-sel-mode" class="sb-select">
+          <option value="single" ${state.mode === "single" ? "selected" : ""}>1. Single-Circuit Inspector</option>
+          <option value="family3x3" ${state.mode === "family3x3" ? "selected" : ""}>2. 3×3 Family Explorer</option>
+          <option value="library6x6" ${state.mode === "library6x6" ? "selected" : ""}>3. Full 4×(3×3) Library</option>
+          <option value="pairwise" ${state.mode === "pairwise" ? "selected" : ""}>4. Side-by-Side Comparator</option>
+          <option value="target" ${state.mode === "target" ? "selected" : ""}>5. Target Response Finder</option>
+          <option value="table" ${state.mode === "table" ? "selected" : ""}>6. Sortable 38-Construct Table</option>
+        </select>
+      </div>
+
+      <div class="sb-group">
+        <div class="sb-label"><span>Circuit Family (FHA1 × Topology)</span></div>
+        <select id="sb-sel-family" class="sb-select">
+          ${FAMILIES.map(f => `<option value="${f.id}" ${state.familyId === f.id ? "selected" : ""}>${f.label} — ${f.mutation === "TAmut" ? "Non-Phospho" : (f.topology === "upright" ? "Anchor FHA1" : "Anchor PKAsub")}</option>`).join("")}
+        </select>
+      </div>
+
+      <div class="sb-group">
+        <div class="sb-label">
+          <span>Configuration (MinD × Cargo)</span>
+          <span style="font-family:var(--font-mono);color:var(--accent);font-size:10.5px;">${c.design_id}</span>
+        </div>
+        <div class="sb-row-inline">
+          <button class="sb-step-btn" id="sb-val-prev" title="Previous Valency (←)">◀</button>
+          <select id="sb-sel-config" class="sb-select">
+            ${configOptionsHTML}
+          </select>
+          <button class="sb-step-btn" id="sb-val-next" title="Next Valency (→)">▶</button>
+        </div>
+      </div>
+
+      ${subViewControlHTML}
+
+      <hr class="sb-divider" />
+
+      <div class="sb-section-title">
+        <span>2. Metric &amp; Display Options</span>
+      </div>
+
+      <div class="sb-group">
+        <div class="sb-label"><span>2D Phase Portrait Metric</span></div>
+        <select id="sb-sel-pmetric" class="sb-select">
+          ${window.PORTRAIT_METRICS.map((m, idx) => `<option value="${m.key}" ${state.portraitMetricKey === m.key ? "selected" : ""}>${idx + 1}. ${m.shortLabel}</option>`).join("")}
+        </select>
+      </div>
+
+      <div class="sb-group">
+        <div class="sb-label"><span>4-Quadrant Dose-Curve Metric</span></div>
+        <select id="sb-sel-qmetric" class="sb-select">
+          ${window.QUADRANT_METRICS.map((m, idx) => `<option value="${m.key}" ${state.quadMetricKey === m.key ? "selected" : ""}>${idx + 1}. ${m.shortLabel}</option>`).join("")}
+        </select>
+      </div>
+
+      <div class="sb-group">
+        <div class="sb-label"><span>Dose-Response Granularity (Key: M)</span></div>
+        <div class="sb-seg-row">
+          <button class="sb-seg-btn ${state.dataSource === "pixel" ? "active" : ""}" data-sb-source="pixel" title="64×64 Superpixel Wave Voxels">Pixel-Voxel</button>
+          <button class="sb-seg-btn ${state.dataSource === "cell" ? "active" : ""}" data-sb-source="cell" title="Single-Cell ultrack Masks (1 Cell = 1 Vote)">ultrack Cell-Mask</button>
+        </div>
+      </div>
+
+      <div class="sb-group">
+        <div class="sb-label"><span>Response Zone Filter (Key: C)</span></div>
+        <div class="sb-seg-row">
+          <button class="sb-seg-btn ${state.confidenceMode === "vsup_contour" ? "active" : ""}" data-sb-conf="vsup_contour">Contour ON</button>
+          <button class="sb-seg-btn ${state.confidenceMode === "vsup_only" ? "active" : ""}" data-sb-conf="vsup_only">Contour OFF</button>
+          <button class="sb-seg-btn ${state.confidenceMode === "raw" ? "active" : ""}" data-sb-conf="raw">Raw</button>
+        </div>
+      </div>
+
+      <div class="sb-group">
+        <div class="sb-label">
+          <span>Plot / Grid Scale</span>
+          <span id="sb-scale-lbl" style="font-family:var(--font-mono);color:var(--accent);">${state.scalePct}%</span>
+        </div>
+        <div class="sb-row-inline">
+          <input type="range" id="sb-slider-scale" min="65" max="140" step="5" value="${state.scalePct}" style="flex:1;accent-color:var(--accent);cursor:pointer;" />
+          <button class="zoom-btn-mini" id="sb-btn-scale-reset" title="Reset to 100% Auto-Fit">100%</button>
+        </div>
+      </div>
+    `;
+
+    // Render pinned Active Architecture card at bottom of sidebar (matching user mockup!)
+    sbArch.innerHTML = `
+      <div class="sb-section-title" style="margin-bottom:6px;">
+        <span>Active Architecture</span>
+        <button class="zoom-btn-mini" id="sb-btn-compare-topo" title="Compare Upright vs Inverse Counterpart">
+          ${c.mutation === "TAmut" ? "vs WT ⇄" : "Upright ⇄ Inverse"}
+        </button>
+      </div>
+      ${window.renderAntennaSchematicHTML(c, true)}
+    `;
+
+    // Wire Sidebar Event Listeners
+    const selMode = document.getElementById("sb-sel-mode");
+    if (selMode) {
+      selMode.addEventListener("change", e => {
+        state.mode = e.target.value;
+        updateUI();
+      });
+    }
+
+    const selFam = document.getElementById("sb-sel-family");
+    if (selFam) {
+      selFam.addEventListener("change", e => {
+        state.familyId = e.target.value;
         syncCircuitFromFamilyValency();
         updateUI();
       });
-    });
+    }
 
-    controlsBar.querySelectorAll("[data-set-valency]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.valency = btn.dataset.setValency;
-        syncCircuitFromFamilyValency();
-        updateUI();
-      });
-    });
-
-    controlsBar.querySelectorAll("[data-set-cid]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        syncFamilyValencyFromCircuit(btn.dataset.setCid);
-        updateUI();
-      });
-    });
-
-    controlsBar.querySelectorAll("[data-set-source]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.dataSource = btn.dataset.setSource;
-        updateUI();
-      });
-    });
-
-    controlsBar.querySelectorAll("[data-set-conf]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.confidenceMode = btn.dataset.setConf;
-        updateUI();
-      });
-    });
-
-    focusBar.querySelectorAll("[data-set-focus]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const fk = btn.dataset.setFocus;
-        state.focus = fk;
-        if (fk.startsWith("m_")) {
-          const mKey = fk.substring(2);
-          state.portraitMetricKey = mKey;
-          const mSpec = window.PORTRAIT_METRIC_MAP[mKey];
-          if (mSpec && mSpec.quadCurveKey) state.quadMetricKey = mSpec.quadCurveKey;
+    const selCfg = document.getElementById("sb-sel-config");
+    if (selCfg) {
+      selCfg.addEventListener("change", e => {
+        if (state.familyId === "TAmut_ctrl") {
+          syncFamilyValencyFromCircuit(e.target.value);
+        } else {
+          state.valency = e.target.value;
+          syncCircuitFromFamilyValency();
         }
         updateUI();
       });
-    });
-
-    focusBar.querySelectorAll("[data-set-viewtype]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.viewType = btn.dataset.setViewtype;
-        updateUI();
-      });
-    });
-
-    focusBar.querySelectorAll("[data-set-pmetric]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.portraitMetricKey = btn.dataset.setPmetric;
-        const mSpec = window.PORTRAIT_METRIC_MAP[state.portraitMetricKey];
-        if (mSpec && mSpec.quadCurveKey) state.quadMetricKey = mSpec.quadCurveKey;
-        updateUI();
-      });
-    });
-
-    focusBar.querySelectorAll("[data-set-qmetric]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.quadMetricKey = btn.dataset.setQmetric;
-        if (state.quadMetricKey === "cell_territory_pct") state.dataSource = "cell";
-        updateUI();
-      });
-    });
-
-    const sliderScale = document.getElementById("slider-scale-pct");
-    if (sliderScale) {
-      sliderScale.addEventListener("input", e => {
-        state.scalePct = parseInt(e.target.value, 10);
-        const lbl = document.getElementById("scale-pct-label");
-        if (lbl) lbl.textContent = `${state.scalePct}%`;
-      });
-      sliderScale.addEventListener("change", () => updateUI());
     }
 
-    const selPairA = document.getElementById("sel-pair-circuit-a");
-    if (selPairA) {
-      selPairA.addEventListener("change", e => {
-        syncFamilyValencyFromCircuit(e.target.value);
+    const btnPrevVal = document.getElementById("sb-val-prev");
+    if (btnPrevVal) {
+      btnPrevVal.addEventListener("click", () => {
+        if (state.familyId === "TAmut_ctrl") {
+          state.selectedCircuitA = state.selectedCircuitA === "1x1_TAmut_inverse" ? "2x2_TAmut_inverse" : "1x1_TAmut_inverse";
+          state.valency = CONSTRUCTS[state.selectedCircuitA].valency;
+        } else {
+          const idx = VALENCIES_9.indexOf(state.valency);
+          state.valency = VALENCIES_9[(idx - 1 + VALENCIES_9.length) % VALENCIES_9.length];
+          syncCircuitFromFamilyValency();
+        }
         updateUI();
       });
     }
-    const selPairB = document.getElementById("sel-pair-circuit-b");
-    if (selPairB) {
-      selPairB.addEventListener("change", e => {
+
+    const btnNextVal = document.getElementById("sb-val-next");
+    if (btnNextVal) {
+      btnNextVal.addEventListener("click", () => {
+        if (state.familyId === "TAmut_ctrl") {
+          state.selectedCircuitA = state.selectedCircuitA === "1x1_TAmut_inverse" ? "2x2_TAmut_inverse" : "1x1_TAmut_inverse";
+          state.valency = CONSTRUCTS[state.selectedCircuitA].valency;
+        } else {
+          const idx = VALENCIES_9.indexOf(state.valency);
+          state.valency = VALENCIES_9[(idx + 1) % VALENCIES_9.length];
+          syncCircuitFromFamilyValency();
+        }
+        updateUI();
+      });
+    }
+
+    const selFocus = document.getElementById("sb-sel-focus");
+    if (selFocus) {
+      selFocus.addEventListener("change", e => {
+        state.focus = e.target.value;
+        updateUI();
+      });
+    }
+
+    sbCtrl.querySelectorAll("[data-sb-viewtype]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.viewType = btn.dataset.sbViewtype;
+        updateUI();
+      });
+    });
+
+    const selCircuitB = document.getElementById("sb-sel-circuit-b");
+    if (selCircuitB) {
+      selCircuitB.addEventListener("change", e => {
         state.selectedCircuitB = e.target.value;
         updateUI();
       });
     }
-    const btnSwap = document.getElementById("btn-swap-circuits");
-    if (btnSwap) {
-      btnSwap.addEventListener("click", () => {
+
+    const btnSwapPair = document.getElementById("sb-btn-swap-pair");
+    if (btnSwapPair) {
+      btnSwapPair.addEventListener("click", () => {
         const tmp = state.selectedCircuitA;
         syncFamilyValencyFromCircuit(state.selectedCircuitB);
         state.selectedCircuitB = tmp;
         updateUI();
       });
     }
-  }
 
-  /**
-   * Builds a Quantitative 4-Quadrant Hill Fit Table (styled with table.fov-table).
-   */
-  function buildQuadrantFitTableHTML(construct, metricKey, dataSource) {
-    const qDict = dataSource === "cell" ? (construct.quadrants_cell || {}) : (construct.quadrants_pixel || {});
-    const qSpec = window.QUADRANT_METRIC_MAP[metricKey] || window.QUADRANT_METRICS[0];
-    const quads = [
-      { key: "Q1_Slow_HiLoad", short: "Q1: Slow (Hi D/E) + Hi Load", dot: "q1" },
-      { key: "Q3_Slow_LoLoad", short: "Q3: Slow (Hi D/E) + Lo Load", dot: "q3" },
-      { key: "Q2_Fast_HiLoad", short: "Q2: Fast (Hi E/D) + Hi Load", dot: "q2" },
-      { key: "Q4_Fast_LoLoad", short: "Q4: Fast (Hi E/D) + Lo Load", dot: "q4" }
-    ];
-
-    const dec = qSpec.decimals;
-    const u = qSpec.unit;
-
-    let rowsHTML = quads.map(q => {
-      const qObj = qDict[q.key] || {};
-      const mObj = (qObj.metrics || {})[metricKey] || {};
-      const f = mObj.fit || {};
-      const nCount = dataSource === "cell" ? qObj.n_cells : qObj.n_voxels;
-      return `
-        <tr>
-          <td><span class="quad-dot ${q.dot}"></span><strong>${q.short}</strong></td>
-          <td>${nCount !== undefined && nCount !== null ? nCount.toLocaleString() : "—"}</td>
-          <td>${formatNum(f.y0, dec, u)}</td>
-          <td style="color:#38bdf8;font-weight:700;">${formatNum(f.y5mM, dec, u)}</td>
-          <td>${formatNum(f.dy, dec, u, true)}</td>
-          <td style="color:#fde047;font-weight:700;">${formatNum(f.ec50, 2, " mM")}</td>
-          <td>${formatNum(f.nhill, 2)}</td>
-          <td>${formatNum(f.r2, 2)}</td>
-        </tr>
-      `;
-    }).join("");
-
-    return `
-      <table class="fov-table">
-        <thead>
-          <tr>
-            <th>Quadrant Stoichiometry Regime</th>
-            <th>${dataSource === "cell" ? "Osc. Cells" : "Wave Voxels"}</th>
-            <th>Basal y₀ (0 mM)</th>
-            <th>Plateau y₅ₘₘ (5 mM)</th>
-            <th>Net Swing Δy</th>
-            <th>Hill EC₅₀</th>
-            <th>Hill n_H</th>
-            <th>Fit R²</th>
-          </tr>
-        </thead>
-        <tbody>${rowsHTML}</tbody>
-      </table>
-    `;
-  }
-
-  /**
-   * MODE 1: Single-Circuit Inspector (Modeled after H9_FOV_Physiology_Atlas_Viewer.html)
-   */
-  function renderSingleMode(container) {
-    const c = CONSTRUCTS[state.selectedCircuitA] || CONSTRUCTS["2x2_WT_upright"];
-    const gs = c.global_summary || {};
-    const badgeCls = getBadgeClassForConstruct(c);
-    const qSpec = window.QUADRANT_METRIC_MAP[state.quadMetricKey] || window.QUADRANT_METRICS[0];
-
-    // 1. 8-Card Metrics Strip at Top (matching H9_FOV_Physiology_Atlas_Viewer.html)
-    const metricsStripHTML = `
-      <div class="metrics-strip">
-        <div class="metric-card">
-          <div class="m-label">Basal 0 mM Coupling (C₀)</div>
-          <div class="m-val" style="color:#fbbf24;">${c.is_clamped_0mM ? "Clamped" : formatNum(gs.c0_basal, 3)}</div>
-          <div class="m-sub">Data_norm / D_norm (0 mM)</div>
-        </div>
-        <div class="metric-card">
-          <div class="m-label">Saturated 5 mM Coupling</div>
-          <div class="m-val" style="color:#38bdf8;">${formatNum(gs.c5mM_sat, 3)}</div>
-          <div class="m-sub">1.00 = 1:1 Wave Tracking</div>
-        </div>
-        <div class="metric-card">
-          <div class="m-label">Net Inducible Swing (ΔC)</div>
-          <div class="m-val" style="color:#34d399;">${formatNum(gs.delta_coup, 3, "", true)}</div>
-          <div class="m-sub">PKA-Driven Coupling Gain</div>
-        </div>
-        <div class="metric-card">
-          <div class="m-label">Baseline Wave Freq (F₀)</div>
-          <div class="m-val">${formatNum(gs.f0_mHz, 1, " mHz")}</div>
-          <div class="m-sub">0 mM Phase-Vocoder Median</div>
-        </div>
-        <div class="metric-card">
-          <div class="m-label">5 mM Frequency Shift (ΔF)</div>
-          <div class="m-val" style="color:${(gs.fm_5mM_pct || 0) >= 0 ? "#f87171" : "#60a5fa"};">${formatNum(gs.fm_5mM_pct, 1, "%", true)}</div>
-          <div class="m-sub">Core Driver Clock Shift</div>
-        </div>
-        <div class="metric-card">
-          <div class="m-label">5 mM Carrier Amp Shift</div>
-          <div class="m-val" style="color:#c084fc;">${formatNum(gs.cr_5mM_pct, 1, "%", true)}</div>
-          <div class="m-sub">MinD Wave Power Change</div>
-        </div>
-        <div class="metric-card">
-          <div class="m-label">Active Segmented Cells</div>
-          <div class="m-val">${formatNum(gs.active_cells_5mM_pct, 1, "%")}</div>
-          <div class="m-sub">0 mM: ${formatNum(gs.active_cells_0mM_pct, 1, "%")} (${(gs.n_cells_total || 0).toLocaleString()} cells)</div>
-        </div>
-        <div class="metric-card">
-          <div class="m-label">Subcellular Wave Territory</div>
-          <div class="m-val" style="color:#34d399;">${formatNum(gs.cell_territory_5mM_pct, 1, "%")}</div>
-          <div class="m-sub">0 mM f_osc: ${formatNum(gs.cell_territory_0mM_pct, 1, "%")}</div>
-        </div>
-      </div>
-    `;
-
-    // 2. Live Clicked-Bin Dose-Response Inspector + Antenna Schematic Dock
-    const inspectorDockHTML = `
-      <div class="fov-card">
-        <div class="fov-card-header">
-          <div>
-            <span class="badge ${badgeCls}">${c.valency} ${c.mutation} ${c.topology.toUpperCase()}</span>
-            <strong style="margin-left:8px;font-size:14px;">${c.arch_desc}</strong>
-            <span style="color:var(--muted);margin-left:8px;font-family:var(--font-mono);font-size:12px;">(${c.design_id} | Plasmids: ${c.plasmids})</span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button class="pill-btn" id="btn-compare-counterpart">
-              ${c.mutation === "TAmut" ? `Compare ${c.valency} WT vs T→A Control →` : "Compare Upright vs Inverse Pair →"}
-            </button>
-          </div>
-        </div>
-
-        <div class="bin-inspector-dock">
-          <!-- Col 1: Interactive Molecular Antenna Schematic -->
-          <div>
-            ${window.renderAntennaSchematicHTML(c, true)}
-          </div>
-
-          <!-- Col 2: Clicked Bin (bx, by) Readout + 4-Quad Overlay Curve -->
-          <div style="display:grid;grid-template-columns:1fr 310px;gap:12px;align-items:center;">
-            <div id="bin-inspector-readout"></div>
-            <div class="tile-card" style="padding:6px;">
-              <div class="tile-card-header">
-                <span id="dock-quad-title">${qSpec.shortLabel}: 4 Quads + Clicked Bin</span>
-              </div>
-              <canvas id="dock-quad-plus-bin-canvas" width="295" height="210"></canvas>
-            </div>
-          </div>
-
-          <!-- Col 3: Clicked Bin (bx, by) Joint Multi-Feature Dose Curve (C, ΔF%, ΔD%) -->
-          <div class="tile-card" style="padding:6px;">
-            <div class="tile-card-header">
-              <span>Clicked Bin Joint Curve: C(c), ΔF%, ΔD%</span>
-              <span class="mono-tag">0 → 5 mM</span>
-            </div>
-            <canvas id="dock-bin-multi-canvas" width="330" height="210"></canvas>
-          </div>
-        </div>
-      </div>
-    `;
-
-    // 3. Main Focus Visual Body (All 9 Portraits Grid, OR All 6 Dose Curves Grid, OR Side-by-Side Metric Pair, OR Single Zoomed Metric)
-    let visualBodyHTML = "";
-    const sz3x3 = getAdaptiveTileSize("single3x3");
-    const szZoom = getAdaptiveTileSize("zoomed");
-
-    if (state.focus === "all_portraits") {
-      visualBodyHTML = `
-        <div class="fov-card">
-          <div class="fov-card-header">
-            <div>
-              <strong>All 9 Intrinsic 2D Stoichiometry Phase Portraits (0 → 5.0 mM Hill Fits)</strong>
-              <span style="color:var(--muted);margin-left:10px;font-size:12px;">
-                Click any <strong>(bx, by) bin</strong> inside a portrait to plot its dose-response curve above, or click <strong>Zoom ⤢</strong> to enlarge.
-              </span>
-            </div>
-            <div style="color:var(--muted);font-size:12px;font-family:var(--font-mono);">
-              Selected Bin: <strong style="color:var(--accent);">(${state.selectedBin.bx}, ${state.selectedBin.by})</strong>
-            </div>
-          </div>
-
-          <div class="portrait-grid-9">
-            ${window.PORTRAIT_METRICS.map((m, idx) => `
-              <div class="tile-card ${m.key === state.portraitMetricKey ? "active-metric" : ""}">
-                <div class="tile-card-header">
-                  <span>${idx + 1}. ${m.shortLabel}</span>
-                  <div style="display:flex;gap:6px;align-items:center;">
-                    <span class="mono-tag" id="stat-tag-${m.key}"></span>
-                    <button class="zoom-btn-mini" data-zoom-metric="${m.key}" title="Zoom into ${m.shortLabel}">Zoom ⤢</button>
-                  </div>
-                </div>
-                <canvas id="single-pcanvas-${m.key}" class="live-portrait-canvas" data-axes="true" data-w="${sz3x3.w}" data-h="${sz3x3.h}" width="${sz3x3.w}" height="${sz3x3.h}" style="cursor:crosshair;"></canvas>
-                <canvas id="single-pcbar-${m.key}" data-w="${sz3x3.w - 16}" data-h="26" width="${sz3x3.w - 16}" height="26"></canvas>
-              </div>
-            `).join("")}
-          </div>
-        </div>
-      `;
-    } else if (state.focus === "all_quads") {
-      visualBodyHTML = `
-        <div class="fov-card">
-          <div class="fov-card-header">
-            <div>
-              <strong>All 6 4-Quadrant Dose-Response Curves (0 → 5.0 mM Bt₂cAMP) — ${state.dataSource === "cell" ? "Single-Cell ultrack Masks (1 Cell = 1 Vote)" : "64×64 Superpixel Wave Voxels"}</strong>
-              <span style="color:var(--muted);margin-left:10px;font-size:12px;">
-                Glowing cyan curve shows currently selected Stoichiometry Bin <strong>(${state.selectedBin.bx}, ${state.selectedBin.by})</strong>.
-              </span>
-            </div>
-            <div class="quad-legend-row">
-              <span><span class="quad-dot q1"></span>Q1: Slow+HiLoad</span>
-              <span><span class="quad-dot q3"></span>Q3: Slow+LoLoad</span>
-              <span><span class="quad-dot q2"></span>Q2: Fast+HiLoad</span>
-              <span><span class="quad-dot q4"></span>Q4: Fast+LoLoad</span>
-              <span><span class="quad-dot bin"></span>Bin (${state.selectedBin.bx},${state.selectedBin.by})</span>
-            </div>
-          </div>
-
-          <div class="portrait-grid-9">
-            ${window.QUADRANT_METRICS.map((qm, idx) => `
-              <div class="tile-card ${qm.key === state.quadMetricKey ? "active-metric" : ""}">
-                <div class="tile-card-header">
-                  <span>${idx + 1}. ${qm.shortLabel}</span>
-                  <span class="mono-tag">${state.dataSource.toUpperCase()}</span>
-                </div>
-                <canvas id="single-qcanvas-${qm.key}" data-w="${sz3x3.w}" data-h="${sz3x3.h}" width="${sz3x3.w}" height="${sz3x3.h}"></canvas>
-              </div>
-            `).join("")}
-          </div>
-        </div>
-      `;
-    } else if (state.focus === "pair_metrics") {
-      const mLeft = window.PORTRAIT_METRIC_MAP[state.pairMetricLeft] || window.PORTRAIT_METRICS[0];
-      const mRight = window.PORTRAIT_METRIC_MAP[state.pairMetricRight] || window.PORTRAIT_METRICS[4];
-      visualBodyHTML = `
-        <div class="fov-card">
-          <div class="fov-card-header">
-            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-              <strong>Side-by-Side Metric Comparison (${c.valency} ${c.mutation} ${c.topology.toUpperCase()})</strong>
-              <label style="font-size:12px;color:var(--muted);">Left Metric:
-                <select id="sel-pair-mleft" class="dark-select">
-                  ${window.PORTRAIT_METRICS.map(m => `<option value="${m.key}" ${m.key === state.pairMetricLeft ? "selected" : ""}>${m.shortLabel}</option>`).join("")}
-                </select>
-              </label>
-              <label style="font-size:12px;color:var(--muted);">Right Metric:
-                <select id="sel-pair-mright" class="dark-select">
-                  ${window.PORTRAIT_METRICS.map(m => `<option value="${m.key}" ${m.key === state.pairMetricRight ? "selected" : ""}>${m.shortLabel}</option>`).join("")}
-                </select>
-              </label>
-            </div>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:center;">
-            <div class="tile-card">
-              <div class="tile-card-header"><span>${mLeft.title}</span></div>
-              <canvas id="pair-mleft-canvas" class="live-portrait-canvas" data-axes="true" data-w="${szZoom.w}" data-h="${szZoom.h}" width="${szZoom.w}" height="${szZoom.h}" style="cursor:crosshair;"></canvas>
-              <canvas id="pair-mleft-cbar" data-w="${szZoom.w - 30}" data-h="30" width="${szZoom.w - 30}" height="30"></canvas>
-            </div>
-            <div class="tile-card">
-              <div class="tile-card-header"><span>${mRight.title}</span></div>
-              <canvas id="pair-mright-canvas" class="live-portrait-canvas" data-axes="true" data-w="${szZoom.w}" data-h="${szZoom.h}" width="${szZoom.w}" height="${szZoom.h}" style="cursor:crosshair;"></canvas>
-              <canvas id="pair-mright-cbar" data-w="${szZoom.w - 30}" data-h="30" width="${szZoom.w - 30}" height="30"></canvas>
-            </div>
-          </div>
-        </div>
-      `;
-    } else if (state.focus.startsWith("m_")) {
-      const mKey = state.focus.substring(2);
-      const pSpec = window.PORTRAIT_METRIC_MAP[mKey] || window.PORTRAIT_METRICS[0];
-      visualBodyHTML = `
-        <div class="fov-card">
-          <div class="fov-card-header">
-            <div>
-              <strong style="font-size:14px;color:var(--accent);">${pSpec.title}</strong>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px;">${pSpec.description}</div>
-            </div>
-            <button class="pill-btn focus-special" id="btn-back-all-portraits">← Back to All 9 Portraits Grid</button>
-          </div>
-
-          <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:center;align-items:flex-start;margin-bottom:14px;">
-            <div class="tile-card">
-              <div class="tile-card-header">
-                <span>2D Stoichiometry Phase Portrait (Click any bin to plot curve)</span>
-                <span class="mono-tag">${c.valency} ${c.mutation} ${c.topology.toUpperCase()}</span>
-              </div>
-              <canvas id="zoomed-portrait-canvas" class="live-portrait-canvas" data-axes="true" data-w="${szZoom.w}" data-h="${szZoom.h}" width="${szZoom.w}" height="${szZoom.h}" style="cursor:crosshair;"></canvas>
-              <canvas id="zoomed-portrait-cbar" data-w="${szZoom.w - 30}" data-h="30" width="${szZoom.w - 30}" height="30"></canvas>
-            </div>
-
-            <div class="tile-card">
-              <div class="tile-card-header">
-                <span>4-Quadrant + Clicked Bin (${state.selectedBin.bx}, ${state.selectedBin.by}) Dose-Response</span>
-                <span class="mono-tag">${state.dataSource.toUpperCase()} MODE</span>
-              </div>
-              <canvas id="zoomed-quad-canvas" data-w="${szZoom.w}" data-h="${szZoom.h}" width="${szZoom.w}" height="${szZoom.h}"></canvas>
-              <div class="quad-legend-row" style="margin-top:6px;">
-                <span><span class="quad-dot q1"></span>Q1</span>
-                <span><span class="quad-dot q3"></span>Q3</span>
-                <span><span class="quad-dot q2"></span>Q2</span>
-                <span><span class="quad-dot q4"></span>Q4</span>
-                <span><span class="quad-dot bin"></span>Clicked Bin (${state.selectedBin.bx},${state.selectedBin.by})</span>
-              </div>
-            </div>
-          </div>
-
-          ${buildQuadrantFitTableHTML(c, state.quadMetricKey, state.dataSource)}
-        </div>
-      `;
+    const selPmetric = document.getElementById("sb-sel-pmetric");
+    if (selPmetric) {
+      selPmetric.addEventListener("change", e => {
+        state.portraitMetricKey = e.target.value;
+        const mSpec = window.PORTRAIT_METRIC_MAP[state.portraitMetricKey];
+        if (mSpec && mSpec.quadCurveKey) {
+          state.quadMetricKey = mSpec.quadCurveKey;
+        }
+        updateUI();
+      });
     }
 
-    container.innerHTML = metricsStripHTML + inspectorDockHTML + visualBodyHTML;
+    const selQmetric = document.getElementById("sb-sel-qmetric");
+    if (selQmetric) {
+      selQmetric.addEventListener("change", e => {
+        state.quadMetricKey = e.target.value;
+        if (state.quadMetricKey === "cell_territory_pct") {
+          state.dataSource = "cell";
+        }
+        updateUI();
+      });
+    }
 
-    // Bind Compare Upright vs Inverse Pair button
-    const btnComp = document.getElementById("btn-compare-counterpart");
-    if (btnComp) {
-      btnComp.addEventListener("click", () => {
+    sbCtrl.querySelectorAll("[data-sb-source]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.dataSource = btn.dataset.sbSource;
+        updateUI();
+      });
+    });
+
+    sbCtrl.querySelectorAll("[data-sb-conf]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.confidenceMode = btn.dataset.sbConf;
+        updateUI();
+      });
+    });
+
+    const sliderScale = document.getElementById("sb-slider-scale");
+    if (sliderScale) {
+      sliderScale.addEventListener("input", e => {
+        state.scalePct = parseInt(e.target.value, 10);
+        const lbl = document.getElementById("sb-scale-lbl");
+        if (lbl) lbl.textContent = `${state.scalePct}%`;
+      });
+      sliderScale.addEventListener("change", () => updateUI());
+    }
+
+    const btnScaleReset = document.getElementById("sb-btn-scale-reset");
+    if (btnScaleReset) {
+      btnScaleReset.addEventListener("click", () => {
+        state.scalePct = 100;
+        updateUI();
+      });
+    }
+
+    const btnCompTopo = document.getElementById("sb-btn-compare-topo");
+    if (btnCompTopo) {
+      btnCompTopo.addEventListener("click", () => {
         if (c.mutation === "TAmut") {
           const wtId = `${c.valency}_WT_inverse`;
           if (CONSTRUCTS[wtId]) {
@@ -942,8 +635,398 @@
         updateUI();
       });
     }
+  }
 
-    // Render canvases depending on focus view
+  /**
+   * Builds a Quantitative 4-Quadrant + Clicked-Bin Hill Fit Table (`table.fov-table`).
+   */
+  function buildQuadrantFitTableHTML(construct, metricKey, dataSource, selectedBin = null) {
+    const qDict = dataSource === "cell" ? (construct.quadrants_cell || {}) : (construct.quadrants_pixel || {});
+    const qSpec = window.QUADRANT_METRIC_MAP[metricKey] || window.QUADRANT_METRICS[0];
+    const quads = [
+      { key: "Q1_Slow_HiLoad", short: "Q1: Slow (Hi D/E) + Hi Load", dot: "q1" },
+      { key: "Q3_Slow_LoLoad", short: "Q3: Slow (Hi D/E) + Lo Load", dot: "q3" },
+      { key: "Q2_Fast_HiLoad", short: "Q2: Fast (Hi E/D) + Hi Load", dot: "q2" },
+      { key: "Q4_Fast_LoLoad", short: "Q4: Fast (Hi E/D) + Lo Load", dot: "q4" }
+    ];
+
+    const dec = qSpec.decimals;
+    const u = qSpec.unit;
+
+    let rowsHTML = quads.map(q => {
+      const qObj = qDict[q.key] || {};
+      const mObj = (qObj.metrics || {})[metricKey] || {};
+      const f = mObj.fit || {};
+      const nCount = dataSource === "cell" ? qObj.n_cells : qObj.n_voxels;
+      const nVal = Array.isArray(nCount)
+        ? Math.round(nCount.reduce((a, b) => a + (b || 0), 0) / Math.max(1, nCount.length))
+        : nCount;
+      return `
+        <tr>
+          <td><span class="quad-dot ${q.dot}"></span><strong>${q.short}</strong></td>
+          <td>${nVal !== undefined && nVal !== null ? `${nVal.toLocaleString()}/d` : "—"}</td>
+          <td>${formatNum(f.y0, dec, u)}</td>
+          <td style="color:#38bdf8;font-weight:700;">${formatNum(f.y5mM, dec, u)}</td>
+          <td>${formatNum(f.dy, dec, u, true)}</td>
+          <td style="color:#fde047;font-weight:700;">${formatNum(f.ec50, 2, " mM")}</td>
+          <td>${formatNum(f.nhill, 2)}</td>
+          <td>${formatNum(f.r2, 2)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    // Append highlighted row for Clicked Bin (bx, by) if available
+    if (selectedBin && selectedBin.bx !== null && selectedBin.bx !== undefined) {
+      const binObj = (construct.bins_2d || []).find(b => b.bx === selectedBin.bx && b.by === selectedBin.by);
+      const bf = window.extractBinHillParams ? window.extractBinHillParams(binObj, metricKey) : null;
+      if (binObj && bf) {
+        rowsHTML += `
+          <tr class="bin-highlight-row">
+            <td><span class="quad-dot bin"></span><strong style="color:#38bdf8;">Clicked Bin (${selectedBin.bx}, ${selectedBin.by})</strong></td>
+            <td>${binObj.nvox ? `~${Math.round(binObj.nvox)}/d` : "—"}</td>
+            <td>${formatNum(bf.y0, dec, u)}</td>
+            <td style="color:#38bdf8;font-weight:700;">${formatNum(bf.y5mM, dec, u)}</td>
+            <td>${formatNum(bf.dy, dec, u, true)}</td>
+            <td style="color:#fde047;font-weight:700;">${formatNum(bf.ec50, 2, " mM")}</td>
+            <td>${formatNum(bf.nhill, 2)}</td>
+            <td>${formatNum(bf.r2, 2)}</td>
+          </tr>
+        `;
+      }
+    }
+
+    return `
+      <table class="fov-table">
+        <thead>
+          <tr>
+            <th>Stoichiometry Regime</th>
+            <th>${dataSource === "cell" ? "Cells" : "Voxels"}</th>
+            <th>Basal y₀</th>
+            <th>5mM y₅ₘₘ</th>
+            <th>Swing Δy</th>
+            <th>EC₅₀</th>
+            <th>n_H</th>
+            <th>R²</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHTML}</tbody>
+      </table>
+    `;
+  }
+
+  /**
+   * Builds the HTML for the Bottom-Left "Fit Information" Card in the Single-Viewer 2x2 Dashboard!
+   */
+  function buildFitInformationPanelHTML(construct, bx, by) {
+    const binObj = (construct.bins_2d || []).find(b => b.bx === bx && b.by === by);
+    const qLabel = bx < 5
+      ? (by >= 5 ? "Q1: Slow (Hi D/E) + Hi Load" : "Q3: Slow (Hi D/E) + Lo Load")
+      : (by >= 5 ? "Q2: Fast (Hi E/D) + Hi Load" : "Q4: Fast (Hi E/D) + Lo Load");
+
+    let binSummaryHTML = "";
+    if (!binObj) {
+      binSummaryHTML = `
+        <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-family:var(--font-mono);font-size:11.5px;color:#f87171;">
+          <strong>Clicked Bin (${bx}, ${by}) [${qLabel.split(":")[0]}]</strong> is unpopulated or non-oscillating in ${construct.valency} ${construct.mutation} ${construct.topology}. Click any colored bin in the 2D Phase Portrait above to inspect its Hill fits.
+        </div>
+      `;
+    } else {
+      binSummaryHTML = `
+        <div style="background:var(--panel-alt);border:1px solid var(--border-light);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-family:var(--font-mono);font-size:11.2px;line-height:1.55;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;border-bottom:1px solid var(--border);padding-bottom:3px;">
+            <strong style="color:#38bdf8;">Clicked Bin (${bx}, ${by}) Multi-Metric Hill Summary</strong>
+            <span style="color:var(--muted);">Δlog₁₀(E/D)=<strong>${formatNum(binObj.x, 2, "", true)}</strong>, Δlog₁₀(Cargo/D)=<strong>${formatNum(binObj.y, 2, "", true)}</strong> · ${qLabel.split(":")[0]}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">
+            <div><span style="color:var(--muted);">Coupling C(c):</span> <strong style="color:#38bdf8;">${formatNum(binObj.coup_y0, 2)} → ${formatNum(binObj.coup_5mM, 2)}</strong> (EC₅₀=${formatNum(binObj.coup_ec50, 2, "mM")}, R²=${formatNum(binObj.coup_r2, 2)})</div>
+            <div><span style="color:var(--muted);">Freq Shift ΔF:</span> <strong style="color:#fbbf24;">${formatNum(binObj.fm_5mM_pct, 1, "%", true)}</strong> (EC₅₀=${formatNum(binObj.fm_ec50, 2, "mM")}, R²=${formatNum(binObj.fm_r2, 2)})</div>
+            <div><span style="color:var(--muted);">Carrier ΔD_amp:</span> <strong style="color:#c084fc;">${formatNum(binObj.cr_5mM_pct, 1, "%", true)}</strong> (${formatNum(binObj.cr_5mM_fold, 2, "×")})</div>
+            <div><span style="color:var(--muted);">Loading / AM:</span> <strong>${formatNum(binObj.load_5mM_fold, 2, "×")}</strong> / <strong>${formatNum(binObj.am_5mM_fold, 2, "×")}</strong> | <span style="color:var(--muted);">ΔOsc:</span> <strong>${formatNum(binObj.osc_dy_pct, 1, "%", true)}</strong></div>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      ${binSummaryHTML}
+      ${buildQuadrantFitTableHTML(construct, state.quadMetricKey, state.dataSource, { bx, by })}
+    `;
+  }
+
+  /**
+   * Updates the Live Clicked-Bin panels, Top HUD telemetry, and cyan bin highlight in-place
+   * (without rebuilding the entire DOM or losing scroll position!).
+   */
+  function updateClickedBinLive(clickedInfo) {
+    if (clickedInfo) {
+      state.selectedBin = {
+        bx: clickedInfo.bx,
+        by: clickedInfo.by,
+        quadrant: clickedInfo.quadrant
+      };
+      if (clickedInfo.metricSpec && state.focus !== "dashboard_2x2") {
+        state.portraitMetricKey = clickedInfo.metricSpec.key;
+        if (clickedInfo.metricSpec.quadCurveKey) {
+          state.quadMetricKey = clickedInfo.metricSpec.quadCurveKey;
+        }
+      }
+    }
+
+    const c = CONSTRUCTS[state.selectedCircuitA] || CONSTRUCTS["2x2_WT_inverse"];
+    const bx = state.selectedBin.bx;
+    const by = state.selectedBin.by;
+    const qSpec = window.QUADRANT_METRIC_MAP[state.quadMetricKey] || window.QUADRANT_METRICS[0];
+
+    // 1. Update Top HUD Bar
+    renderTopHud();
+
+    // 2. Update Bottom-Left Fit Information Panel (`#bin-fit-info-panel`)
+    const fitInfoEl = document.getElementById("bin-fit-info-panel");
+    if (fitInfoEl) {
+      fitInfoEl.innerHTML = buildFitInformationPanelHTML(c, bx, by);
+    }
+
+    // 3. Update Top-Right 4-Quadrant + Clicked Bin Dose-Response Canvas (`#dash-quad-canvas`)
+    const dashQuadTitle = document.getElementById("dash-quad-title");
+    if (dashQuadTitle) {
+      dashQuadTitle.textContent = `4-Quadrant + Clicked Bin (${bx}, ${by}) Dose-Response — ${qSpec.shortLabel}`;
+    }
+    const dashQuadLegendBin = document.getElementById("dash-quad-legend-bin");
+    if (dashQuadLegendBin) {
+      dashQuadLegendBin.textContent = `Clicked Bin (${bx}, ${by})`;
+    }
+    const dashQuadCvs = document.getElementById("dash-quad-canvas");
+    if (dashQuadCvs) {
+      window.renderQuadrantDoseCurveCanvas(dashQuadCvs, c, {
+        dataSource: state.dataSource,
+        metricKey: state.quadMetricKey,
+        showAxesLabels: true,
+        showAnnotationBox: true,
+        selectedBin: state.selectedBin
+      });
+    }
+
+    // 4. Update Bottom-Right Clicked Bin Joint Co-Dosing Curve (`#dock-bin-multi-canvas`)
+    const dockMultiCvs = document.getElementById("dock-bin-multi-canvas");
+    if (dockMultiCvs) {
+      window.renderSingleBinMultiCurveCanvas(dockMultiCvs, c, bx, by);
+    }
+
+    // 5. Redraw all currently mounted 2D phase portrait canvases in-place so the cyan highlight box moves to (bx, by)
+    document.querySelectorAll("canvas.live-portrait-canvas").forEach(cvs => {
+      const meta = cvs._portraitMeta;
+      if (meta && meta.construct && meta.metricSpec) {
+        window.renderPhasePortraitCanvas(cvs, meta.construct, meta.metricSpec, {
+          confidenceMode: state.confidenceMode,
+          showAxesLabels: cvs.dataset.axes === "true",
+          showSummaryBadge: true,
+          highlightBin: (meta.construct.id === c.id) ? state.selectedBin : null
+        });
+      }
+    });
+  }
+
+  /**
+   * MODE 1: Single-Circuit Inspector
+   * Defaults to the clean 2×2 Dashboard drawn in the user's mockup:
+   *   - Top-Left:    2D Stoichiometry Phase Portrait (Click any bin to plot curve)
+   *   - Top-Right:   4-Quadrant + Clicked Bin (bx, by) Dose-Response
+   *   - Bottom-Left: Fit Information (Clicked Bin Summary + 4-Quadrant Hill Fit Table)
+   *   - Bottom-Right: Clicked Bin Joint Curve: C(c), ΔF%, ΔD% (Shared 0mM Origin + IQR Bars)
+   */
+  function renderSingleMode(container) {
+    const c = CONSTRUCTS[state.selectedCircuitA] || CONSTRUCTS["2x2_WT_inverse"];
+    const pSpec = window.PORTRAIT_METRIC_MAP[state.portraitMetricKey] || window.PORTRAIT_METRICS[0];
+    const qSpec = window.QUADRANT_METRIC_MAP[state.quadMetricKey] || window.QUADRANT_METRICS[0];
+    const bx = state.selectedBin.bx;
+    const by = state.selectedBin.by;
+
+    const szDash = getAdaptiveTileSize("dashboard2x2");
+    const sz3x3 = getAdaptiveTileSize("single3x3");
+
+    if (state.focus === "dashboard_2x2") {
+      container.innerHTML = `
+        <div class="single-2x2-grid">
+          <!-- TOP-LEFT: 2D Stoichiometry Phase Portrait -->
+          <div class="tile-card" style="align-items:center;justify-content:space-between;">
+            <div class="tile-card-header">
+              <span>2D Stoichiometry Phase Portrait (Click any bin to plot curve)</span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <span class="mono-tag">${c.valency} ${c.mutation} ${c.topology.toUpperCase()}</span>
+                <button class="zoom-btn-mini" id="btn-show-all-9-portraits" title="View All 9 Phase Portraits (3×3 Grid)">All 9 ⊞</button>
+              </div>
+            </div>
+            <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;width:100%;display:flex;justify-content:space-between;align-items:center;">
+              <strong style="color:var(--accent);">${pSpec.title}</strong>
+              <span style="font-family:var(--font-mono);font-size:11px;" id="dash-p-stat"></span>
+            </div>
+            <canvas id="dash-portrait-canvas" class="live-portrait-canvas" data-axes="true" data-w="${szDash.w}" data-h="${szDash.h}" width="${szDash.w}" height="${szDash.h}" style="cursor:crosshair;"></canvas>
+            <canvas id="dash-portrait-cbar" data-w="${szDash.w - 24}" data-h="28" width="${szDash.w - 24}" height="28" style="margin-top:4px;"></canvas>
+          </div>
+
+          <!-- TOP-RIGHT: 4-Quadrant + Clicked Bin (bx, by) Dose-Response -->
+          <div class="tile-card" style="align-items:center;justify-content:space-between;">
+            <div class="tile-card-header">
+              <span id="dash-quad-title">4-Quadrant + Clicked Bin (${bx}, ${by}) Dose-Response — ${qSpec.shortLabel}</span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <span class="mono-tag">${state.dataSource.toUpperCase()} MODE</span>
+                <button class="zoom-btn-mini" id="btn-show-all-6-quads" title="View All 6 Quadrant Dose-Response Curves">All 6 ⊞</button>
+              </div>
+            </div>
+            <canvas id="dash-quad-canvas" data-w="${szDash.w}" data-h="${szDash.h}" width="${szDash.w}" height="${szDash.h}"></canvas>
+            <div class="quad-legend-row" style="margin-top:6px;width:100%;justify-content:center;">
+              <span><span class="quad-dot q1"></span>Q1</span>
+              <span><span class="quad-dot q3"></span>Q3</span>
+              <span><span class="quad-dot q2"></span>Q2</span>
+              <span><span class="quad-dot q4"></span>Q4</span>
+              <span><span class="quad-dot bin"></span><strong style="color:#38bdf8;" id="dash-quad-legend-bin">Clicked Bin (${bx}, ${by})</strong></span>
+            </div>
+          </div>
+
+          <!-- BOTTOM-LEFT: Fit Information (Clicked Bin Multi-Metric Summary + 4-Quad Fit Table) -->
+          <div class="tile-card" style="align-items:stretch;justify-content:flex-start;">
+            <div class="tile-card-header">
+              <span>Hill Fit Information: 4 Quadrants &amp; Clicked Bin</span>
+              <span class="mono-tag">${qSpec.shortLabel} (${state.dataSource.toUpperCase()})</span>
+            </div>
+            <div id="bin-fit-info-panel" style="width:100%;">
+              ${buildFitInformationPanelHTML(c, bx, by)}
+            </div>
+          </div>
+
+          <!-- BOTTOM-RIGHT: Clicked Bin Joint Curve: C(c), ΔF%, ΔD% -->
+          <div class="tile-card" style="align-items:center;justify-content:space-between;">
+            <div class="tile-card-header">
+              <span>Clicked Bin Joint Curve: C(c), ΔF%, ΔD%</span>
+              <span class="mono-tag">Shared 0mM Origin · IQR Bars</span>
+            </div>
+            <canvas id="dock-bin-multi-canvas" data-w="${szDash.w}" data-h="${szDash.h}" width="${szDash.w}" height="${szDash.h}"></canvas>
+            <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:4px;text-align:center;">
+              Left Axis (Cyan): Coupling C(c) anchored at C₀ | Right Axis (Amber/Purple): ΔF% &amp; ΔD_amp% anchored at 0%
+            </div>
+          </div>
+        </div>
+      `;
+
+      const pCvs = document.getElementById("dash-portrait-canvas");
+      const pCbar = document.getElementById("dash-portrait-cbar");
+      if (pCvs) {
+        const res = window.renderPhasePortraitCanvas(pCvs, c, pSpec, {
+          confidenceMode: state.confidenceMode,
+          showAxesLabels: true,
+          showSummaryBadge: true,
+          highlightBin: state.selectedBin
+        });
+        const stEl = document.getElementById("dash-p-stat");
+        if (stEl) stEl.textContent = `${res.activeBins} active bins`;
+        window.attachPortraitInteractivity(pCvs, handleBinHover, clicked => updateClickedBinLive(clicked));
+      }
+      if (pCbar) window.renderColorbarCanvas(pCbar, pSpec);
+
+      const btnAll9 = document.getElementById("btn-show-all-9-portraits");
+      if (btnAll9) btnAll9.addEventListener("click", () => { state.focus = "all_portraits"; updateUI(); });
+      const btnAll6 = document.getElementById("btn-show-all-6-quads");
+      if (btnAll6) btnAll6.addEventListener("click", () => { state.focus = "all_quads"; updateUI(); });
+
+      updateClickedBinLive(null);
+      return;
+    }
+
+    // Optional expanded sub-views inside Single-Circuit Mode (All 9 Portraits 3x3, All 6 Quads 3x2, or Metric Pair)
+    let subBodyHTML = "";
+    if (state.focus === "all_portraits") {
+      subBodyHTML = `
+        <div class="fov-card">
+          <div class="fov-card-header">
+            <div>
+              <strong>All 9 Intrinsic 2D Stoichiometry Phase Portraits (${c.valency} ${c.mutation} ${c.topology.toUpperCase()})</strong>
+              <span style="color:var(--muted);margin-left:10px;font-size:12px;">
+                Click any <strong>(bx, by) bin</strong> or click <strong>2×2 Dashboard ⤢</strong> to inspect its dose-response curves.
+              </span>
+            </div>
+            <button class="pill-btn active" id="btn-back-2x2">← Back to 2×2 Inspector Dashboard</button>
+          </div>
+          <div class="portrait-grid-9">
+            ${window.PORTRAIT_METRICS.map((m, idx) => `
+              <div class="tile-card ${m.key === state.portraitMetricKey ? "active-metric" : ""}">
+                <div class="tile-card-header">
+                  <span>${idx + 1}. ${m.shortLabel}</span>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <span class="mono-tag" id="stat-tag-${m.key}"></span>
+                    <button class="zoom-btn-mini" data-zoom-metric="${m.key}">2×2 ⤢</button>
+                  </div>
+                </div>
+                <canvas id="single-pcanvas-${m.key}" class="live-portrait-canvas" data-axes="true" data-w="${sz3x3.w}" data-h="${sz3x3.h}" width="${sz3x3.w}" height="${sz3x3.h}" style="cursor:crosshair;"></canvas>
+                <canvas id="single-pcbar-${m.key}" data-w="${sz3x3.w - 16}" data-h="24" width="${sz3x3.w - 16}" height="24"></canvas>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    } else if (state.focus === "all_quads") {
+      subBodyHTML = `
+        <div class="fov-card">
+          <div class="fov-card-header">
+            <div>
+              <strong>All 6 4-Quadrant + Clicked Bin (${bx}, ${by}) Dose-Response Curves — ${state.dataSource.toUpperCase()} MODE</strong>
+            </div>
+            <button class="pill-btn active" id="btn-back-2x2">← Back to 2×2 Inspector Dashboard</button>
+          </div>
+          <div class="portrait-grid-9">
+            ${window.QUADRANT_METRICS.map((qm, idx) => `
+              <div class="tile-card ${qm.key === state.quadMetricKey ? "active-metric" : ""}">
+                <div class="tile-card-header">
+                  <span>${idx + 1}. ${qm.shortLabel}</span>
+                  <button class="zoom-btn-mini" data-zoom-qmetric="${qm.key}">2×2 ⤢</button>
+                </div>
+                <canvas id="single-qcanvas-${qm.key}" data-w="${sz3x3.w}" data-h="${sz3x3.h}" width="${sz3x3.w}" height="${sz3x3.h}"></canvas>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    } else if (state.focus === "pair_metrics") {
+      const mLeft = window.PORTRAIT_METRIC_MAP[state.pairMetricLeft] || window.PORTRAIT_METRICS[0];
+      const mRight = window.PORTRAIT_METRIC_MAP[state.pairMetricRight] || window.PORTRAIT_METRICS[4];
+      subBodyHTML = `
+        <div class="fov-card">
+          <div class="fov-card-header">
+            <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+              <strong>Side-by-Side Metric Comparison (${c.valency} ${c.mutation} ${c.topology.toUpperCase()})</strong>
+              <label style="font-size:12px;color:var(--muted);">Left:
+                <select id="sel-pair-mleft" class="dark-select">
+                  ${window.PORTRAIT_METRICS.map(m => `<option value="${m.key}" ${m.key === state.pairMetricLeft ? "selected" : ""}>${m.shortLabel}</option>`).join("")}
+                </select>
+              </label>
+              <label style="font-size:12px;color:var(--muted);">Right:
+                <select id="sel-pair-mright" class="dark-select">
+                  ${window.PORTRAIT_METRICS.map(m => `<option value="${m.key}" ${m.key === state.pairMetricRight ? "selected" : ""}>${m.shortLabel}</option>`).join("")}
+                </select>
+              </label>
+            </div>
+            <button class="pill-btn active" id="btn-back-2x2">← Back to 2×2 Inspector Dashboard</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;">
+            <div class="tile-card">
+              <div class="tile-card-header"><span>${mLeft.title}</span></div>
+              <canvas id="pair-mleft-canvas" class="live-portrait-canvas" data-axes="true" data-w="${szDash.w}" data-h="${szDash.h}" width="${szDash.w}" height="${szDash.h}" style="cursor:crosshair;"></canvas>
+              <canvas id="pair-mleft-cbar" data-w="${szDash.w - 24}" data-h="28" width="${szDash.w - 24}" height="28"></canvas>
+            </div>
+            <div class="tile-card">
+              <div class="tile-card-header"><span>${mRight.title}</span></div>
+              <canvas id="pair-mright-canvas" class="live-portrait-canvas" data-axes="true" data-w="${szDash.w}" data-h="${szDash.h}" width="${szDash.w}" height="${szDash.h}" style="cursor:crosshair;"></canvas>
+              <canvas id="pair-mright-cbar" data-w="${szDash.w - 24}" data-h="28" width="${szDash.w - 24}" height="28"></canvas>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = subBodyHTML;
+
+    const btnBack = document.getElementById("btn-back-2x2");
+    if (btnBack) btnBack.addEventListener("click", () => { state.focus = "dashboard_2x2"; updateUI(); });
+
     if (state.focus === "all_portraits") {
       for (const m of window.PORTRAIT_METRICS) {
         const cvs = document.getElementById(`single-pcanvas-${m.key}`);
@@ -956,23 +1039,25 @@
             highlightBin: state.selectedBin
           });
           const tag = document.getElementById(`stat-tag-${m.key}`);
-          if (tag) tag.textContent = `${res.activeBins} bins`;
-          // Clicking a bin updates the live Bin Dose-Response Inspector in-place!
+          if (tag) tag.textContent = `${res.activeBins}b`;
           window.attachPortraitInteractivity(cvs, handleBinHover, clicked => {
-            updateClickedBinLive(clicked);
+            state.portraitMetricKey = m.key;
+            if (m.quadCurveKey) state.quadMetricKey = m.quadCurveKey;
+            state.selectedBin = { bx: clicked.bx, by: clicked.by, quadrant: clicked.quadrant };
+            state.focus = "dashboard_2x2";
+            updateUI();
           });
         }
         if (cbar) window.renderColorbarCanvas(cbar, m);
       }
-
       container.querySelectorAll("[data-zoom-metric]").forEach(btn => {
         btn.addEventListener("click", e => {
           e.stopPropagation();
           const mKey = btn.dataset.zoomMetric;
-          state.focus = `m_${mKey}`;
           state.portraitMetricKey = mKey;
           const mSpec = window.PORTRAIT_METRIC_MAP[mKey];
           if (mSpec && mSpec.quadCurveKey) state.quadMetricKey = mSpec.quadCurveKey;
+          state.focus = "dashboard_2x2";
           updateUI();
         });
       });
@@ -989,6 +1074,13 @@
           });
         }
       }
+      container.querySelectorAll("[data-zoom-qmetric]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.quadMetricKey = btn.dataset.zoomQmetric;
+          state.focus = "dashboard_2x2";
+          updateUI();
+        });
+      });
     } else if (state.focus === "pair_metrics") {
       const mLeft = window.PORTRAIT_METRIC_MAP[state.pairMetricLeft] || window.PORTRAIT_METRICS[0];
       const mRight = window.PORTRAIT_METRIC_MAP[state.pairMetricRight] || window.PORTRAIT_METRICS[4];
@@ -1011,27 +1103,7 @@
       const selR = document.getElementById("sel-pair-mright");
       if (selL) selL.addEventListener("change", e => { state.pairMetricLeft = e.target.value; updateUI(); });
       if (selR) selR.addEventListener("change", e => { state.pairMetricRight = e.target.value; updateUI(); });
-    } else if (state.focus.startsWith("m_")) {
-      const mKey = state.focus.substring(2);
-      const pSpec = window.PORTRAIT_METRIC_MAP[mKey] || window.PORTRAIT_METRICS[0];
-      const zCvs = document.getElementById("zoomed-portrait-canvas");
-      const zCbar = document.getElementById("zoomed-portrait-cbar");
-      if (zCvs) {
-        window.renderPhasePortraitCanvas(zCvs, c, pSpec, {
-          confidenceMode: state.confidenceMode,
-          showAxesLabels: true,
-          showSummaryBadge: true,
-          highlightBin: state.selectedBin
-        });
-        window.attachPortraitInteractivity(zCvs, handleBinHover, clicked => updateClickedBinLive(clicked));
-      }
-      if (zCbar) window.renderColorbarCanvas(zCbar, pSpec);
-      const btnBack = document.getElementById("btn-back-all-portraits");
-      if (btnBack) btnBack.addEventListener("click", () => { state.focus = "all_portraits"; updateUI(); });
     }
-
-    // Populate the live Bin Inspector Dock canvases & text
-    updateClickedBinLive(null);
   }
 
   /**
@@ -1069,18 +1141,18 @@
     }
 
     container.innerHTML = `
-      <div class="fov-card">
+      <div class="fov-card" style="margin-bottom:0;">
         <div class="fov-card-header">
           <div>
             <span class="badge ${fam.badgeClass}">${fam.label.toUpperCase()} FAMILY (3×3 MATRIX)</span>
-            <strong style="margin-left:8px;font-size:14px;">
+            <strong style="margin-left:8px;font-size:13.5px;">
               ${state.viewType === "portraits" ? pSpec.title : `${qSpec.shortLabel} (${state.dataSource.toUpperCase()} Mode)`}
             </strong>
-            <span style="color:var(--muted);margin-left:8px;font-size:12px;">${fam.subtitle}</span>
+            <span style="color:var(--muted);margin-left:8px;font-size:11.5px;">${fam.subtitle}</span>
           </div>
           <div>
             ${state.viewType === "portraits"
-              ? `<canvas id="fam3x3-cbar" width="270" height="30"></canvas>`
+              ? `<canvas id="fam3x3-cbar" data-w="250" data-h="26" width="250" height="26"></canvas>`
               : `<div class="quad-legend-row">
                    <span><span class="quad-dot q1"></span>Q1: Slow+HiLoad</span>
                    <span><span class="quad-dot q3"></span>Q3: Slow+LoLoad</span>
@@ -1116,6 +1188,7 @@
           syncFamilyValencyFromCircuit(cid);
           state.selectedBin = { bx: clicked.bx, by: clicked.by, quadrant: clicked.quadrant };
           state.mode = "single";
+          state.focus = "dashboard_2x2";
           updateUI();
         });
       } else {
@@ -1128,6 +1201,7 @@
         cvs.addEventListener("click", () => {
           syncFamilyValencyFromCircuit(cid);
           state.mode = "single";
+          state.focus = "dashboard_2x2";
           updateUI();
         });
       }
@@ -1137,6 +1211,7 @@
       btn.addEventListener("click", () => {
         syncFamilyValencyFromCircuit(btn.dataset.openSingle);
         state.mode = "single";
+        state.focus = "dashboard_2x2";
         updateUI();
       });
     });
@@ -1156,7 +1231,7 @@
         const cid = `${v}_${mut}_${topo}`;
         const c = CONSTRUCTS[cid];
         cells += `
-          <div class="tile-card" style="padding:5px;">
+          <div class="tile-card" style="padding:4px 5px;">
             <div class="tile-card-header" style="font-size:10.5px;margin-bottom:3px;">
               <span>${v} <span style="color:var(--muted);font-weight:400;">${c ? c.design_id : ""}</span></span>
               <button class="zoom-btn-mini" data-open-single="${cid}">↗</button>
@@ -1179,20 +1254,20 @@
     };
 
     container.innerHTML = `
-      <div class="fov-card">
+      <div class="fov-card" style="margin-bottom:0;">
         <div class="fov-card-header">
           <div>
-            <strong style="font-size:14.5px;color:var(--accent);">
+            <strong style="font-size:13.5px;color:var(--accent);">
               Full 36-Construct Library (4 × 3×3 Layout) —
               ${state.viewType === "portraits" ? pSpec.title : `${qSpec.shortLabel} (${state.dataSource.toUpperCase()} Mode)`}
             </strong>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px;">
-              Click any construct tile or stoichiometry bin to jump directly to its Single-Circuit Inspector.
-            </div>
+            <span style="font-size:11.5px;color:var(--muted);margin-left:8px;">
+              Click any construct tile or stoichiometry bin to open its 2×2 Inspector.
+            </span>
           </div>
           <div>
             ${state.viewType === "portraits"
-              ? `<canvas id="lib6x6-cbar" data-w="270" data-h="28" width="270" height="28"></canvas>`
+              ? `<canvas id="lib6x6-cbar" data-w="250" data-h="26" width="250" height="26"></canvas>`
               : `<div class="quad-legend-row">
                    <span><span class="quad-dot q1"></span>Q1: Slow+HiLoad</span>
                    <span><span class="quad-dot q3"></span>Q3: Slow+LoLoad</span>
@@ -1211,17 +1286,17 @@
         </div>
 
         <!-- T->A Negative Controls Strip -->
-        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
           <div>
             <span class="badge badge-tamut">NEGATIVE CONTROLS</span>
-            <strong style="margin-left:8px;">1×1 &amp; 2×2 Non-Phosphorylatable PKAsub(T→A) Inverse Controls</strong>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px;">
-              Abolishes PKA phosphorylation of PKAsub on MinD (<code>1x1_TAmut_inverse</code> &amp; <code>2x2_TAmut_inverse</code>), confirming that cAMP-induced coupling, FM shifts, and carrier power gain require phospho-threonine binding.
+            <strong style="margin-left:8px;font-size:12.5px;">1×1 &amp; 2×2 Non-Phosphorylatable PKAsub(T→A) Inverse Controls</strong>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">
+              Abolishes PKA phosphorylation of PKAsub on MinD (<code>1x1_TAmut_inverse</code> &amp; <code>2x2_TAmut_inverse</code>), confirming that cAMP-induced coupling requires phospho-threonine binding.
             </div>
           </div>
-          <div style="display:flex;gap:12px;">
+          <div style="display:flex;gap:10px;">
             ${["1x1_TAmut_inverse", "2x2_TAmut_inverse"].map(cid => `
-              <div class="tile-card" style="padding:5px;">
+              <div class="tile-card" style="padding:4px 5px;">
                 <div class="tile-card-header" style="font-size:10.5px;">
                   <span>${cid.replace(/_/g, " ")}</span>
                   <button class="zoom-btn-mini" data-open-single="${cid}">↗</button>
@@ -1252,6 +1327,7 @@
           syncFamilyValencyFromCircuit(c.id);
           state.selectedBin = { bx: clicked.bx, by: clicked.by, quadrant: clicked.quadrant };
           state.mode = "single";
+          state.focus = "dashboard_2x2";
           updateUI();
         });
       } else {
@@ -1264,6 +1340,7 @@
         cvs.addEventListener("click", () => {
           syncFamilyValencyFromCircuit(c.id);
           state.mode = "single";
+          state.focus = "dashboard_2x2";
           updateUI();
         });
       }
@@ -1273,6 +1350,7 @@
       btn.addEventListener("click", () => {
         syncFamilyValencyFromCircuit(btn.dataset.openSingle);
         state.mode = "single";
+        state.focus = "dashboard_2x2";
         updateUI();
       });
     });
@@ -1286,6 +1364,7 @@
     const cB = CONSTRUCTS[state.selectedCircuitB] || CONSTRUCTS["2x2_WT_inverse"];
     const pSpec = window.PORTRAIT_METRIC_MAP[state.portraitMetricKey] || window.PORTRAIT_METRICS[0];
     const qSpec = window.QUADRANT_METRIC_MAP[state.quadMetricKey] || window.QUADRANT_METRICS[0];
+    const szPair = getAdaptiveTileSize("pairwise3col");
 
     const pairPresets = [
       { label: "2×2 WT Upright vs 2×2 WT Inverse", a: "2x2_WT_upright", b: "2x2_WT_inverse" },
@@ -1297,10 +1376,10 @@
     ];
 
     container.innerHTML = `
-      <div class="fov-card">
+      <div class="fov-card" style="margin-bottom:0;">
         <div class="fov-card-header">
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-            <span class="ctrl-label">Pair Presets:</span>
+            <strong style="color:var(--accent);margin-right:4px;">Quick Pair Presets:</strong>
             ${pairPresets.map(p => `
               <button class="pill-btn ${cA.id === p.a && cB.id === p.b ? "active" : ""}" data-pair-a="${p.a}" data-pair-b="${p.b}">
                 ${p.label}
@@ -1310,46 +1389,46 @@
         </div>
 
         <!-- 3-Column Phase Portrait Comparison: Circuit A | Difference Δ(A - B) | Circuit B -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(330px, 1fr));gap:14px;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:repeat(3, minmax(240px, 1fr));gap:10px;margin-bottom:12px;">
           <div class="tile-card">
             <div class="tile-card-header">
-              <span style="color:#60a5fa;">Circuit A: ${cA.valency} ${cA.mutation} ${cA.topology.toUpperCase()} (${cA.design_id})</span>
+              <span style="color:#60a5fa;">Circuit A: ${cA.valency} ${cA.mutation} ${cA.topology.toUpperCase()}</span>
               <span class="mono-tag">${pSpec.shortLabel}</span>
             </div>
-            <canvas id="pair-pcanvas-a" width="340" height="280"></canvas>
-            <canvas id="pair-pcbar-a" width="310" height="30"></canvas>
+            <canvas id="pair-pcanvas-a" data-w="${szPair.w}" data-h="${szPair.h}" width="${szPair.w}" height="${szPair.h}"></canvas>
+            <canvas id="pair-pcbar-a" data-w="${szPair.w - 24}" data-h="26" width="${szPair.w - 24}" height="26"></canvas>
           </div>
 
           <div class="tile-card">
             <div class="tile-card-header">
-              <span style="color:#fde047;">Difference Map: Δ(Circuit A − Circuit B)</span>
-              <span class="mono-tag">Red: A &gt; B | Blue: B &gt; A</span>
+              <span style="color:#fde047;">Difference: Δ(Circuit A − Circuit B)</span>
+              <span class="mono-tag">Red: A&gt;B | Blue: B&gt;A</span>
             </div>
-            <canvas id="pair-pcanvas-diff" width="340" height="280"></canvas>
-            <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:6px;">
+            <canvas id="pair-pcanvas-diff" data-w="${szPair.w}" data-h="${szPair.h}" width="${szPair.w}" height="${szPair.h}"></canvas>
+            <div style="font-family:var(--font-mono);font-size:10.5px;color:var(--muted);margin-top:4px;">
               Bin-by-bin subtraction across shared (bx, by) coordinates
             </div>
           </div>
 
           <div class="tile-card">
             <div class="tile-card-header">
-              <span style="color:#f87171;">Circuit B: ${cB.valency} ${cB.mutation} ${cB.topology.toUpperCase()} (${cB.design_id})</span>
+              <span style="color:#f87171;">Circuit B: ${cB.valency} ${cB.mutation} ${cB.topology.toUpperCase()}</span>
               <span class="mono-tag">${pSpec.shortLabel}</span>
             </div>
-            <canvas id="pair-pcanvas-b" width="340" height="280"></canvas>
-            <canvas id="pair-pcbar-b" width="310" height="30"></canvas>
+            <canvas id="pair-pcanvas-b" data-w="${szPair.w}" data-h="${szPair.h}" width="${szPair.w}" height="${szPair.h}"></canvas>
+            <canvas id="pair-pcbar-b" data-w="${szPair.w - 24}" data-h="26" width="${szPair.w - 24}" height="26"></canvas>
           </div>
         </div>
 
         <!-- 2-Column 4-Quadrant Dose-Response Curves + Schematics + Tables -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div class="tile-card" style="align-items:stretch;">
             <div class="tile-card-header">
               <span style="color:#60a5fa;">Circuit A — 4-Quadrant ${qSpec.shortLabel} (${state.dataSource.toUpperCase()})</span>
               <span class="mono-tag">${cA.valency} ${cA.mutation} ${cA.topology.toUpperCase()}</span>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;margin-bottom:10px;">
-              <canvas id="pair-qcanvas-a" width="300" height="235"></canvas>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;margin-bottom:8px;">
+              <canvas id="pair-qcanvas-a" data-w="${szPair.w}" data-h="${szPair.h}" width="${szPair.w}" height="${szPair.h}"></canvas>
               ${window.renderAntennaSchematicHTML(cA, true)}
             </div>
             ${buildQuadrantFitTableHTML(cA, state.quadMetricKey, state.dataSource)}
@@ -1360,8 +1439,8 @@
               <span style="color:#f87171;">Circuit B — 4-Quadrant ${qSpec.shortLabel} (${state.dataSource.toUpperCase()})</span>
               <span class="mono-tag">${cB.valency} ${cB.mutation} ${cB.topology.toUpperCase()}</span>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;margin-bottom:10px;">
-              <canvas id="pair-qcanvas-b" width="300" height="235"></canvas>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;margin-bottom:8px;">
+              <canvas id="pair-qcanvas-b" data-w="${szPair.w}" data-h="${szPair.h}" width="${szPair.w}" height="${szPair.h}"></canvas>
               ${window.renderAntennaSchematicHTML(cB, true)}
             </div>
             ${buildQuadrantFitTableHTML(cB, state.quadMetricKey, state.dataSource)}
@@ -1413,35 +1492,35 @@
     const critKeys = Object.keys(state.targetCriteria);
 
     container.innerHTML = `
-      <div style="display:grid;grid-template-columns:390px 1fr;gap:16px;align-items:start;">
+      <div style="display:grid;grid-template-columns:360px 1fr;gap:14px;align-items:start;">
         <!-- Left Column: Presets, Interactive 2D Pad, Sliders -->
-        <div class="fov-card">
+        <div class="fov-card" style="margin-bottom:0;">
           <div class="fov-card-header">
             <strong style="color:var(--accent);">1. Biophysical Archetype Presets</strong>
           </div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">
             ${window.TARGET_PRESETS.map(pr => `
               <button class="pill-btn ${state.targetPresetId === pr.id ? "active" : ""}" data-preset-id="${pr.id}">
                 ${pr.name}
               </button>
             `).join("")}
           </div>
-          <div style="font-size:12px;color:var(--muted);background:var(--panel-deep);padding:8px 10px;border-radius:6px;border:1px solid var(--border);margin-bottom:14px;">
+          <div style="font-size:11.5px;color:var(--muted);background:var(--panel-deep);padding:7px 9px;border-radius:6px;border:1px solid var(--border);margin-bottom:12px;">
             ${(window.TARGET_PRESETS.find(p => p.id === state.targetPresetId) || {}).desc || "Custom user-defined target specification."}
           </div>
 
           <div class="fov-card-header">
-            <strong style="color:var(--accent);">2. Click Target Region on 2D Stoichiometry Pad</strong>
+            <strong style="color:var(--accent);">2. Click Target Region on Stoichiometry Pad</strong>
           </div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">
-            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q1_Slow_HiLoad" ? "active" : ""}" data-reg-q="Q1_Slow_HiLoad">Q1 (Slow+HiLoad)</button>
-            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q3_Slow_LoLoad" ? "active" : ""}" data-reg-q="Q3_Slow_LoLoad">Q3 (Slow+LoLoad)</button>
-            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q2_Fast_HiLoad" ? "active" : ""}" data-reg-q="Q2_Fast_HiLoad">Q2 (Fast+HiLoad)</button>
-            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q4_Fast_LoLoad" ? "active" : ""}" data-reg-q="Q4_Fast_LoLoad">Q4 (Fast+LoLoad)</button>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q1_Slow_HiLoad" ? "active" : ""}" data-reg-q="Q1_Slow_HiLoad">Q1 (Slow+Hi)</button>
+            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q3_Slow_LoLoad" ? "active" : ""}" data-reg-q="Q3_Slow_LoLoad">Q3 (Slow+Lo)</button>
+            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q2_Fast_HiLoad" ? "active" : ""}" data-reg-q="Q2_Fast_HiLoad">Q2 (Fast+Hi)</button>
+            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q4_Fast_LoLoad" ? "active" : ""}" data-reg-q="Q4_Fast_LoLoad">Q4 (Fast+Lo)</button>
             <button class="pill-btn ${state.targetRegionSpec.mode === "all" ? "active" : ""}" data-reg-all="1">All Bins</button>
           </div>
-          <div style="display:flex;justify-content:center;margin-bottom:14px;">
-            <canvas id="target-pad-canvas" width="330" height="270" style="cursor:crosshair;"></canvas>
+          <div style="display:flex;justify-content:center;margin-bottom:12px;">
+            <canvas id="target-pad-canvas" data-w="310" data-h="250" width="310" height="250" style="cursor:crosshair;"></canvas>
           </div>
 
           <div class="fov-card-header">
@@ -1451,8 +1530,8 @@
             const cObj = state.targetCriteria[k];
             return `
               <div class="target-slider-row" style="opacity:${cObj.enabled ? "1.0" : "0.5"};">
-                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:4px;">
-                  <label style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+                <div style="display:flex;justify-content:space-between;font-size:11.5px;font-weight:600;margin-bottom:3px;">
+                  <label style="cursor:pointer;display:flex;align-items:center;gap:5px;">
                     <input type="checkbox" class="crit-cb" data-crit-key="${k}" ${cObj.enabled ? "checked" : ""}/>
                     ${cObj.label}
                   </label>
@@ -1467,13 +1546,13 @@
         </div>
 
         <!-- Right Column: Ranked Matches -->
-        <div class="fov-card">
+        <div class="fov-card" style="margin-bottom:0;">
           <div class="fov-card-header">
             <div>
-              <strong style="font-size:14.5px;color:var(--accent);">Closest Matching Antenna-Circuit Designs (Top 9 of 36)</strong>
-              <div style="font-size:12px;color:var(--muted);">
+              <strong style="font-size:14px;color:var(--accent);">Closest Matching Antenna-Circuit Designs (Top 9 of 36)</strong>
+              <span style="font-size:11.5px;color:var(--muted);margin-left:8px;">
                 Evaluated in <strong>${state.targetRegionSpec.mode === "quadrant" ? state.targetRegionSpec.quadrant.replace(/_/g, " ") : (state.targetRegionSpec.mode === "bin" ? `Stoichiometry Bin (${state.targetRegionSpec.bx}, ${state.targetRegionSpec.by}) ± 1` : "All Populated Bins")}</strong>
-              </div>
+              </span>
             </div>
           </div>
 
@@ -1485,17 +1564,17 @@
                 <div class="tile-card ${idx === 0 ? "active-metric" : ""}" style="align-items:stretch;">
                   <div class="tile-card-header">
                     <span>#${idx + 1} — ${mc.valency} ${mc.mutation} ${mc.topology.toUpperCase()}</span>
-                    <span class="badge ${getBadgeClassForConstruct(mc)}">${item.matchScore.toFixed(1)}% Match</span>
+                    <span class="badge ${getBadgeClassForConstruct(mc)}">${item.matchScore.toFixed(1)}%</span>
                   </div>
-                  <div style="display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;">
-                    <canvas id="match-canvas-${mc.id}" width="150" height="130"></canvas>
-                    <div style="font-family:var(--font-mono);font-size:11px;line-height:1.5;color:var(--text);">
+                  <div style="display:grid;grid-template-columns:145px 1fr;gap:8px;align-items:center;">
+                    <canvas id="match-canvas-${mc.id}" data-w="145" data-h="125" width="145" height="125"></canvas>
+                    <div style="font-family:var(--font-mono);font-size:10.5px;line-height:1.45;color:var(--text);">
                       <div><span style="color:var(--muted);">C₅ₘₘ / C₀:</span> <strong>${formatNum(st.coup_5mM, 2)}</strong> / ${formatNum(st.coup_y0, 2)}</div>
                       <div><span style="color:var(--muted);">ΔC / EC₅₀:</span> <strong>${formatNum(st.coup_dy, 2, "", true)}</strong> / ${formatNum(st.coup_ec50, 2, "mM")}</div>
                       <div><span style="color:var(--muted);">ΔF₅ₘₘ:</span> <strong style="color:#fbbf24;">${formatNum(st.fm_5mM_pct, 1, "%", true)}</strong></div>
                       <div><span style="color:var(--muted);">ΔD₅ₘₘ:</span> <strong style="color:#c084fc;">${formatNum(st.cr_5mM_pct, 1, "%", true)}</strong></div>
                       <div><span style="color:var(--muted);">ΔOsc%:</span> <strong>${formatNum(st.osc_dy_pct, 1, "%", true)}</strong></div>
-                      <button class="zoom-btn-mini" data-open-single="${mc.id}" style="margin-top:6px;width:100%;padding:4px;">Open Inspector ↗</button>
+                      <button class="zoom-btn-mini" data-open-single="${mc.id}" style="margin-top:5px;width:100%;padding:3px;">Inspect 2×2 ↗</button>
                     </div>
                   </div>
                 </div>
@@ -1595,13 +1674,14 @@
       btn.addEventListener("click", () => {
         syncFamilyValencyFromCircuit(btn.dataset.openSingle);
         state.mode = "single";
+        state.focus = "dashboard_2x2";
         updateUI();
       });
     });
   }
 
   /**
-   * MODE 6: Sortable 38-Construct Library Table (Modeled after Mode 5 in H9_FOV_Physiology_Atlas_Viewer.html)
+   * MODE 6: Sortable 38-Construct Library Table
    */
   function renderSortableTableMode(container) {
     const rowsData = getOrderedConstructs(true).map(c => {
@@ -1660,30 +1740,33 @@
     `).join("");
 
     container.innerHTML = `
-      <p style="color:var(--muted);margin-top:0;font-size:12.5px;">
-        Click any column header to sort all 38 constructs (36 active + 2 T→A controls), or click any row to jump directly to its Single-Circuit Inspector.
-      </p>
-      <table class="fov-table">
-        <thead>
-          <tr>
-            <th data-sort="family">Family</th>
-            <th data-sort="valency">Valency</th>
-            <th data-sort="design_id">Design ID</th>
-            <th data-sort="c0_basal">Basal C₀ (0 mM)</th>
-            <th data-sort="c5mM_sat">Sat. C₅ₘₘ (5 mM)</th>
-            <th data-sort="delta_coup">Inducible ΔC</th>
-            <th data-sort="q1_ec50">Q1 Hill EC₅₀</th>
-            <th data-sort="q4_c5mM">Q4 Fast C₅ₘₘ</th>
-            <th data-sort="fm_5mM_pct">5 mM ΔF%</th>
-            <th data-sort="cr_5mM_pct">5 mM ΔD_amp%</th>
-            <th data-sort="load_5mM_fold">Loading Fold</th>
-            <th data-sort="active_cells_5mM_pct">Active Cells (5 mM)</th>
-            <th data-sort="cell_territory_5mM_pct">Wave Territory f_osc</th>
-            <th data-sort="n_cells_total">Total ultrack Cells</th>
-          </tr>
-        </thead>
-        <tbody>${trHTML}</tbody>
-      </table>
+      <div class="fov-card" style="margin-bottom:0;">
+        <div class="fov-card-header">
+          <strong>Sortable 38-Construct Library Summary Table (36 Active Designs + 2 T→A Negative Controls)</strong>
+          <span style="color:var(--muted);font-size:11.5px;">Click any column header to sort, or click any row to open its 2×2 Single-Circuit Inspector.</span>
+        </div>
+        <table class="fov-table">
+          <thead>
+            <tr>
+              <th data-sort="family">Family</th>
+              <th data-sort="valency">Valency</th>
+              <th data-sort="design_id">Design ID</th>
+              <th data-sort="c0_basal">Basal C₀ (0 mM)</th>
+              <th data-sort="c5mM_sat">Sat. C₅ₘₘ (5 mM)</th>
+              <th data-sort="delta_coup">Inducible ΔC</th>
+              <th data-sort="q1_ec50">Q1 Hill EC₅₀</th>
+              <th data-sort="q4_c5mM">Q4 Fast C₅ₘₘ</th>
+              <th data-sort="fm_5mM_pct">5 mM ΔF%</th>
+              <th data-sort="cr_5mM_pct">5 mM ΔD_amp%</th>
+              <th data-sort="load_5mM_fold">Loading Fold</th>
+              <th data-sort="active_cells_5mM_pct">Active Cells (5 mM)</th>
+              <th data-sort="cell_territory_5mM_pct">Wave Territory f_osc</th>
+              <th data-sort="n_cells_total">Total ultrack Cells</th>
+            </tr>
+          </thead>
+          <tbody>${trHTML}</tbody>
+        </table>
+      </div>
     `;
 
     container.querySelectorAll("[data-sort]").forEach(th => {
@@ -1699,8 +1782,8 @@
       tr.addEventListener("click", () => {
         syncFamilyValencyFromCircuit(tr.dataset.jumpCid);
         state.mode = "single";
+        state.focus = "dashboard_2x2";
         updateUI();
-        window.scrollTo({ top: 0, behavior: "smooth" });
       });
     });
   }
@@ -1710,7 +1793,8 @@
    */
   function updateUI() {
     if (tooltipEl) tooltipEl.style.display = "none";
-    renderControlBars();
+    renderTopHud();
+    renderSidebar();
 
     const container = document.getElementById("view-container");
     if (!container) return;
@@ -1730,15 +1814,8 @@
     }
   }
 
-  // Bind top header mode tabs & keyboard shortcuts
+  // Bind keyboard shortcuts & window resize
   document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll(".mode-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.mode = btn.dataset.mode;
-        updateUI();
-      });
-    });
-
     window.addEventListener("keydown", e => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
       if (e.key === "1") { state.familyId = "WT_upright"; syncCircuitFromFamilyValency(); updateUI(); }
@@ -1769,7 +1846,6 @@
         state.portraitMetricKey = mKeys[nextIdx];
         const mSpec = window.PORTRAIT_METRIC_MAP[state.portraitMetricKey];
         if (mSpec && mSpec.quadCurveKey) state.quadMetricKey = mSpec.quadCurveKey;
-        if (state.focus.startsWith("m_")) state.focus = `m_${state.portraitMetricKey}`;
         updateUI();
       } else if (e.key.toLowerCase() === "c") {
         state.confidenceMode = state.confidenceMode === "vsup_contour" ? "vsup_only" : "vsup_contour";

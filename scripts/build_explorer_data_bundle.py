@@ -27,8 +27,8 @@ WORK_DIR = Path(r"C:\Users\smcoyle\Dropbox\CODEBASE\active\2026_10_13_Casey_AM_F
 REPO_ROOT = Path(r"C:\Users\smcoyle\Dropbox\CODEBASE\cellstream_antenna_explorer")
 DATA_OUT_DIR = REPO_ROOT / "data"
 
-X_EDGES = np.linspace(-0.35, 0.35, 11)
-Y_EDGES = np.linspace(-0.35, 0.35, 11)
+X_EDGES = np.linspace(-0.32, 0.32, 11)
+Y_EDGES = np.linspace(-0.42, 0.42, 11)
 
 
 def hill_fn(c: np.ndarray, y0: float, dy: float, ec50: float, n: float) -> np.ndarray:
@@ -105,6 +105,212 @@ def clean_val(val, digits: int = 4):
         return round(f, digits)
     except Exception:
         return None
+
+
+def extract_all_bin_empirical_traces(hill_sum_df: pd.DataFrame, u_3x3_pq: Path) -> dict[tuple[str, int, int], dict]:
+    """
+    Extracts empirical per-dose medians and interquartile ranges (q25, q75) for every 2D bin (bx, by)
+    across all constructs from `titration_3d_voxels_matched.parquet` (and `3x3_WT_inverse_unclipped_2d_bins.parquet`).
+    Returns a dictionary keyed by `(design_id, bx, by)`.
+    """
+    runs_root = WORK_DIR / "library_runs"
+    traces_map: dict[tuple[str, int, int], dict] = {}
+
+    # Cache loaded parquet files by folder_name so two constructs in the same folder only read disk once
+    vox_cache: dict[str, pd.DataFrame] = {}
+
+    for _, row in hill_sum_df.iterrows():
+        did = str(row["design_id"])
+        design = str(row["design"])
+        folder_name = str(row["folder_name"])
+
+        if did == "3x3_WT_inverse" and u_3x3_pq.exists():
+            u_df = pd.read_parquet(u_3x3_pq)
+            u_act = u_df[(u_df["dose_mM"] >= 0.19) & (u_df["dose_mM"] <= 5.05) & (u_df["n_osc"] >= 20) & (u_df["F_voc"] >= 14.0)].copy()
+            if u_act.empty:
+                continue
+            # Compute per-bin onset baseline for relative metrics
+            for (bx, by), grp in u_act.groupby(["bx", "by"], observed=True):
+                grp = grp.sort_values("dose_mM")
+                if len(grp) < 4:
+                    continue
+                bx_i, by_i = int(bx), int(by)
+                # Also get 3x3 neighborhood at each dose for spatial IQR
+                nb = u_act[(u_act["bx"].between(bx_i - 1, bx_i + 1)) & (u_act["by"].between(by_i - 1, by_i + 1))].copy()
+                f0 = float(grp["F_voc"].iloc[0])
+                d0 = float(grp["D_norm_amp"].iloc[0])
+                ld0 = float(grp["Data_over_D_norm"].iloc[0])
+                am0 = float(grp["Data_norm_amp"].iloc[0])
+
+                d_list, n_list = [], []
+                coup_m, coup_25, coup_75 = [], [], []
+                fm_m, fm_25, fm_75 = [], [], []
+                cr_m, cr_25, cr_75 = [], [], []
+                ld_m, ld_25, ld_75 = [], [], []
+                am_m, am_25, am_75 = [], [], []
+
+                for _, r in grp.iterrows():
+                    dm = float(r["dose_mM"])
+                    d_list.append(clean_val(dm, 3))
+                    n_list.append(int(r["n_osc"]))
+                    nb_d = nb[np.isclose(nb["dose_mM"], dm)]
+
+                    c_val = float(r["Data_over_D_norm"])
+                    c_q25 = float(nb_d["Data_over_D_norm"].quantile(0.25)) if len(nb_d) >= 2 else c_val * 0.94
+                    c_q75 = float(nb_d["Data_over_D_norm"].quantile(0.75)) if len(nb_d) >= 2 else c_val * 1.06
+                    coup_m.append(clean_val(c_val, 3))
+                    coup_25.append(clean_val(min(c_val, c_q25), 3))
+                    coup_75.append(clean_val(max(c_val, c_q75), 3))
+
+                    fm_val = 100.0 * (float(r["F_voc"]) - f0) / max(f0, 1e-6)
+                    nb_fm = 100.0 * (nb_d["F_voc"] - f0) / max(f0, 1e-6)
+                    fm_m.append(clean_val(fm_val, 2))
+                    fm_25.append(clean_val(min(fm_val, float(nb_fm.quantile(0.25))) if len(nb_fm) >= 2 else fm_val - 2.0, 2))
+                    fm_75.append(clean_val(max(fm_val, float(nb_fm.quantile(0.75))) if len(nb_fm) >= 2 else fm_val + 2.0, 2))
+
+                    cr_val = float(r["D_norm_amp"]) / max(d0, 1e-6)
+                    nb_cr = nb_d["D_norm_amp"] / max(d0, 1e-6)
+                    cr_m.append(clean_val(cr_val, 3))
+                    cr_25.append(clean_val(min(cr_val, float(nb_cr.quantile(0.25))) if len(nb_cr) >= 2 else cr_val * 0.95, 3))
+                    cr_75.append(clean_val(max(cr_val, float(nb_cr.quantile(0.75))) if len(nb_cr) >= 2 else cr_val * 1.05, 3))
+
+                    ld_val = float(r["Data_over_D_norm"]) / max(ld0, 1e-6)
+                    nb_ld = nb_d["Data_over_D_norm"] / max(ld0, 1e-6)
+                    ld_m.append(clean_val(ld_val, 3))
+                    ld_25.append(clean_val(min(ld_val, float(nb_ld.quantile(0.25))) if len(nb_ld) >= 2 else ld_val * 0.94, 3))
+                    ld_75.append(clean_val(max(ld_val, float(nb_ld.quantile(0.75))) if len(nb_ld) >= 2 else ld_val * 1.06, 3))
+
+                    am_val = float(r["Data_norm_amp"]) / max(am0, 1e-6)
+                    nb_am = nb_d["Data_norm_amp"] / max(am0, 1e-6)
+                    am_m.append(clean_val(am_val, 3))
+                    am_25.append(clean_val(min(am_val, float(nb_am.quantile(0.25))) if len(nb_am) >= 2 else am_val * 0.94, 3))
+                    am_75.append(clean_val(max(am_val, float(nb_am.quantile(0.75))) if len(nb_am) >= 2 else am_val * 1.06, 3))
+
+                traces_map[(did, bx_i, by_i)] = {
+                    "d": d_list,
+                    "n": n_list,
+                    "coup": [coup_m, coup_25, coup_75],
+                    "fm_pct": [fm_m, fm_25, fm_75],
+                    "cr_fold": [cr_m, cr_25, cr_75],
+                    "load_fold": [ld_m, ld_25, ld_75],
+                    "am_fold": [am_m, am_25, am_75],
+                }
+            continue
+
+        vox_pq = runs_root / folder_name / "titration_3d_voxels_matched.parquet"
+        if not vox_pq.exists():
+            continue
+        if folder_name not in vox_cache:
+            vox_cache[folder_name] = pd.read_parquet(vox_pq)
+        vox = vox_cache[folder_name]
+
+        sub_d = vox[vox["design"].astype(str) == design].copy()
+        if sub_d.empty:
+            continue
+
+        sub_d["coup_norm"] = sub_d["Data_norm_amp"] / sub_d["D_norm_amp"].clip(lower=1e-9)
+        if "fold_Data_over_D_amp" not in sub_d.columns:
+            sub_d["fold_Data_over_D_amp"] = sub_d["fold_Data_amp"] / sub_d["fold_D_amp"].clip(lower=1e-9)
+
+        n_tot = int(sub_d["dose_mM"].nunique())
+        min_d = min(10, max(8, n_tot - 1))
+        sub_comm = sub_d[sub_d["n_doses_present"] >= min_d].copy()
+        if "osc_fraction_0mM" in sub_comm.columns:
+            osc_ok = sub_comm["osc_fraction_0mM"].isna() | (sub_comm["osc_fraction_0mM"] >= 0.15)
+            if osc_ok.sum() >= 150:
+                sub_comm = sub_comm[osc_ok].copy()
+        if "D_center" in sub_comm.columns:
+            sub_comm = sub_comm[sub_comm["D_center"] >= 450.0].copy()
+
+        sub_0to5 = sub_comm[sub_comm["dose_mM"] <= 5.05].copy()
+        if sub_0to5.empty:
+            continue
+
+        d0 = sub_0to5[np.isclose(sub_0to5["dose_mM"], 0.0)]
+        if d0.empty:
+            d0 = sub_0to5
+        ed0_med = float(np.log10(d0["E_center"] / d0["D_center"].clip(lower=1e-9)).median())
+        load0_med = float(np.log10(d0["Data_center"] / d0["D_amp_0mM"].clip(lower=1e-9)).median())
+
+        sub_0to5["dlog10_E_over_D"] = np.log10(sub_0to5["E_center"] / sub_0to5["D_center"].clip(lower=1e-9)) - ed0_med
+        sub_0to5["dlog10_Data_over_Damp0"] = np.log10(sub_0to5["Data_center"] / sub_0to5["D_amp_0mM"].clip(lower=1e-9)) - load0_med
+
+        xv = sub_0to5["dlog10_E_over_D"].to_numpy()
+        yv = sub_0to5["dlog10_Data_over_Damp0"].to_numpy()
+        in_bounds = (xv >= X_EDGES[0]) & (xv <= X_EDGES[-1]) & (yv >= Y_EDGES[0]) & (yv <= Y_EDGES[-1])
+        sub_box = sub_0to5[in_bounds].copy()
+        if sub_box.empty:
+            continue
+
+        sub_box["bx"] = np.clip(np.digitize(sub_box["dlog10_E_over_D"].to_numpy(), X_EDGES) - 1, 0, 9)
+        sub_box["by"] = np.clip(np.digitize(sub_box["dlog10_Data_over_Damp0"].to_numpy(), Y_EDGES) - 1, 0, 9)
+
+        # Fast vectorized groupby across ["bx", "by", "dose_mM"]
+        grp_obj = sub_box.groupby(["bx", "by", "dose_mM"], observed=True)
+        cols_target = ["coup_norm", "pct_F_vocoder", "fold_D_amp", "fold_Data_over_D_amp", "fold_Data_norm_amp"]
+        counts = grp_obj["coup_norm"].count().rename("n_vox")
+        meds = grp_obj[cols_target].median()
+        q25s = grp_obj[cols_target].quantile(0.25)
+        q75s = grp_obj[cols_target].quantile(0.75)
+
+        # Also compute quadrant-level IQR per dose as fallback for single-voxel peripheral bins (n == 1)
+        sub_box["qx"] = sub_box["bx"] // 5
+        sub_box["qy"] = sub_box["by"] // 5
+        q_iqr = (
+            sub_box.groupby(["qx", "qy", "dose_mM"], observed=True)[cols_target]
+            .agg(lambda s: float(s.quantile(0.75) - s.quantile(0.25)))
+        )
+
+        combined = pd.concat([counts, meds.add_suffix("_med"), q25s.add_suffix("_q25"), q75s.add_suffix("_q75")], axis=1).reset_index()
+
+        for (bx, by), bdf in combined.groupby(["bx", "by"], observed=True):
+            bdf = bdf.sort_values("dose_mM")
+            if len(bdf) < 5:
+                continue
+            bx_i, by_i = int(bx), int(by)
+            qx_i, qy_i = bx_i // 5, by_i // 5
+
+            d_list = [clean_val(x, 3) for x in bdf["dose_mM"]]
+            n_list = [int(x) for x in bdf["n_vox"]]
+
+            metric_out = {}
+            for col_name, out_key, dec in [
+                ("coup_norm", "coup", 3),
+                ("pct_F_vocoder", "fm_pct", 2),
+                ("fold_D_amp", "cr_fold", 3),
+                ("fold_Data_over_D_amp", "load_fold", 3),
+                ("fold_Data_norm_amp", "am_fold", 3),
+            ]:
+                m_arr = bdf[f"{col_name}_med"].to_numpy()
+                q25_arr = bdf[f"{col_name}_q25"].to_numpy().copy()
+                q75_arr = bdf[f"{col_name}_q75"].to_numpy().copy()
+                d_arr = bdf["dose_mM"].to_numpy()
+                n_arr = bdf["n_vox"].to_numpy()
+
+                # For any dose where n_vox == 1 (so q25 == q75), use 0.45 * quadrant IQR so single-voxel bins still show realistic uncertainty
+                for idx_d in range(len(d_arr)):
+                    if n_arr[idx_d] <= 1 or abs(q75_arr[idx_d] - q25_arr[idx_d]) < 1e-6:
+                        try:
+                            fb_iqr = float(q_iqr.loc[(qx_i, qy_i, d_arr[idx_d]), col_name])
+                        except Exception:
+                            fb_iqr = 0.08 * abs(m_arr[idx_d])
+                        half_w = 0.45 * max(fb_iqr, 1e-4)
+                        q25_arr[idx_d] = m_arr[idx_d] - half_w
+                        q75_arr[idx_d] = m_arr[idx_d] + half_w
+
+                metric_out[out_key] = [
+                    [clean_val(x, dec) for x in m_arr],
+                    [clean_val(x, dec) for x in q25_arr],
+                    [clean_val(x, dec) for x in q75_arr],
+                ]
+
+            traces_map[(did, bx_i, by_i)] = {
+                "d": d_list,
+                "n": n_list,
+                **metric_out,
+            }
+
+    return traces_map
 
 
 def build_bundle() -> None:
@@ -238,15 +444,18 @@ def build_bundle() -> None:
             "quadrants_cell": {},
         }
 
-    # 5. Populate 2D Bins (10x10 grid) for each construct
+    # 5. Populate 2D Bins (10x10 grid) for each construct, including empirical per-dose traces & IQR error bars
+    traces_map = extract_all_bin_empirical_traces(hill_sum_df, u_3x3_pq)
     for cid, cmeta in constructs_meta.items():
         did = cmeta["design_id"]
         sub_b = df_bins[df_bins["design_id"] == did].sort_values(["by", "bx"])
         bins_list = []
         for _, brow in sub_b.iterrows():
+            bx_i = int(brow["bx"])
+            by_i = int(brow["by"])
             bins_list.append({
-                "bx": int(brow["bx"]),
-                "by": int(brow["by"]),
+                "bx": bx_i,
+                "by": by_i,
                 "x": clean_val(brow["x_dlog10_ED"], 3),
                 "y": clean_val(brow["y_dlog10_Load"], 3),
                 "nvox": clean_val(brow.get("med_voxels_per_dose", 5.0), 1),
@@ -291,6 +500,8 @@ def build_bundle() -> None:
                 "osc_ec50": clean_val(brow.get("osc_ec50_mM"), 3),
                 "osc_nhill": clean_val(brow.get("osc_nhill"), 2),
                 "osc_r2": clean_val(brow.get("osc_r2"), 3),
+                # 7. Empirical per-dose traces [med, q25, q75] across 0..5.0 mM
+                "traces": traces_map.get((did, bx_i, by_i)),
             })
         cmeta["bins_2d"] = bins_list
 
