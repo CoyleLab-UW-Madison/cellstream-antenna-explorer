@@ -4,27 +4,20 @@ build_z_slices_bundle.py
 Compiles the 3rd-Variable ("Core Sample") Z-Slice data for every 2D bin `(bx, by)`
 across all 38 constructs and all 8 coordinate projections (4 Self-Centered + 4 Global Shared).
 
-For each 2D projection, the hidden 3rd variable `Z` (always in physical absolute `log₁₀(AU)` units) is:
-  - `d_vs_cargo` / `d_vs_cargo_abs` (`Cargo vs MinD`):         Z = `log₁₀(MinE [AU])`  in [3.95, 4.75]
-  - `damp_vs_cargo` / `damp_vs_cargo_abs` (`Cargo vs D_amp`):  Z = `log₁₀(MinE [AU])`  in [3.95, 4.75]
-  - `d_vs_e` / `d_vs_e_abs` (`MinE vs MinD`):                  Z = `log₁₀(Cargo [AU])` in [2.80, 4.28]
-  - `ed_vs_load` / `ed_vs_load_abs` (`Cargo/D_amp vs E/D`):    Z = `log₁₀(MinD [AU])`  in [2.22, 3.62]
+Crucially, every projection's 3rd variable `Z` uses the EXACT 10-bin axis (`nz = 10`, `11` edges)
+that the normal 2D Phase Portrait uses when plotting that variable:
+  - Global Shared (`log₁₀ AU`):
+      * `d_vs_cargo_abs` & `damp_vs_cargo_abs` -> Z = `abs_log10_E`     in [3.95, 4.75] (10 bins, Mid 4.35, matching `d_vs_e_abs` Y-axis)
+      * `d_vs_e_abs`                           -> Z = `abs_log10_Cargo` in [2.80, 4.28] (10 bins, Mid 3.54, matching `d_vs_cargo_abs` Y-axis)
+      * `ed_vs_load_abs`                       -> Z = `abs_log10_D`     in [2.22, 3.62] (10 bins, Mid 2.92, matching `d_vs_cargo_abs` X-axis)
+  - Self-Centered (`Δlog₁₀` relative to construct 0 mM median, with physical `med_z` offset stored):
+      * `d_vs_cargo` & `damp_vs_cargo`         -> Z = `dlog10_E`        in [-0.28, +0.28] (10 bins, Mid 0.0, matching `d_vs_e` Y-axis)
+      * `d_vs_e`                               -> Z = `dlog10_Cargo`    in [-0.45, +0.45] (10 bins, Mid 0.0, matching `d_vs_cargo` Y-axis)
+      * `ed_vs_load`                           -> Z = `dlog10_D`        in [-0.36, +0.36] (10 bins, Mid 0.0, matching `d_vs_cargo` X-axis)
 
-Inside each 2D bin `(bx, by)`, computes:
-  1. `slices`: Up to 8 slices (`bz = 0..7`) along the absolute `log₁₀(AU)` Z-axis, each with
-     empirical dose traces `[m(d_0), ..., m(d_k)]` for all 6 metrics (`coup`, `fm_pct`, `cr_fold`,
-     `load_fold`, `am_fold`, `osc_pct`), plus 0 mM vs 5 mM summary values.
-     Powers:
-       - Panel A: 2D `[Bt₂cAMP Dose] × [3rd Variable log₁₀ AU]` Response Portrait Heatmap
-       - Panel B1: `Metric vs. 3rd Variable (log₁₀ AU)` Basal (0 mM) vs Saturated (5 mM) Cross-Section
-  2. `tertiles`: 3 Z-strata (`lo`, `mid`, `hi`) dividing the 3D voxels inside `(bx, by)` by their
-     3rd variable `Z`, with empirical median traces and Hill curve fits (`y0`, `y5mM`, `ec50`, `nhill`, `r2`).
-     Powers:
-       - Panel B2: Stratified `Low Z / Mid Z / High Z` Dose-Response Curves (`0..5 mM Bt₂cAMP`)
-
-Outputs two compact JS bundles (< 25 MB each, avoiding GitHub's 50 MB warning):
-  - `data/antenna_z_slices_abs.js`  (for the 4 Global Shared `log₁₀ AU` projections)
-  - `data/antenna_z_slices_self.js` (for the 4 Self-Centered `Δlog₁₀` projections)
+In addition to each 2D bin `(bx, by)`'s core sample slices (`s`) and Z-tertiles (`t`),
+also stores `whole` (the whole construct's 10-bin 3rd-variable profile pooled across all `(bx, by)` bins)
+so the inspector can render the clicked bin's core slice directly relative to the whole portrait on the full 10-bin axis.
 """
 
 from __future__ import annotations
@@ -47,60 +40,98 @@ from build_explorer_data_bundle import (
 
 
 Z_AXIS_SPECS = {
+    # -------------------------------------------------------------------------
+    # Self-Centered (Δlog₁₀) Projections — exact 10-bin axes from PROJECTION_DEFS
+    # -------------------------------------------------------------------------
     "d_vs_cargo": {
-        "z_col": "abs_log10_E",
-        "z_edges": [round(float(x), 3) for x in np.linspace(3.95, 4.75, 9)],
-        "z_label": "Absolute MinE Expression log₁₀(MinE [AU])",
-        "z_short": "log₁₀(MinE AU)",
-        "z_symbol": "MinE",
-    },
-    "d_vs_cargo_abs": {
-        "z_col": "abs_log10_E",
-        "z_edges": [round(float(x), 3) for x in np.linspace(3.95, 4.75, 9)],
-        "z_label": "Absolute MinE Expression log₁₀(MinE [AU])",
-        "z_short": "log₁₀(MinE AU)",
+        "z_col": "dlog10_E",
+        "z_abs_col": "abs_log10_E",
+        "z_med_key": "e",
+        "is_global_abs": False,
+        "z_edges": [round(float(x), 3) for x in np.linspace(-0.28, 0.28, 11)],
+        "z_ticks": ["+0.25", "0.0", "-0.25"],
+        "z_label": "MinE Regulator Expression Δlog₁₀(MinE) [Low MinE ← 0 → High MinE]",
+        "z_short": "Δlog₁₀(MinE Expr)",
         "z_symbol": "MinE",
     },
     "damp_vs_cargo": {
+        "z_col": "dlog10_E",
+        "z_abs_col": "abs_log10_E",
+        "z_med_key": "e",
+        "is_global_abs": False,
+        "z_edges": [round(float(x), 3) for x in np.linspace(-0.28, 0.28, 11)],
+        "z_ticks": ["+0.25", "0.0", "-0.25"],
+        "z_label": "MinE Regulator Expression Δlog₁₀(MinE) [Low MinE ← 0 → High MinE]",
+        "z_short": "Δlog₁₀(MinE Expr)",
+        "z_symbol": "MinE",
+    },
+    "d_vs_e": {
+        "z_col": "dlog10_Cargo",
+        "z_abs_col": "abs_log10_Cargo",
+        "z_med_key": "cargo",
+        "is_global_abs": False,
+        "z_edges": [round(float(x), 3) for x in np.linspace(-0.45, 0.45, 11)],
+        "z_ticks": ["+0.4", "0.0", "-0.4"],
+        "z_label": "Client Cargo Expression Δlog₁₀(Cargo) [Low Cargo ← 0 → High Cargo]",
+        "z_short": "Δlog₁₀(Cargo Expr)",
+        "z_symbol": "Cargo",
+    },
+    "ed_vs_load": {
+        "z_col": "dlog10_D",
+        "z_abs_col": "abs_log10_D",
+        "z_med_key": "d",
+        "is_global_abs": False,
+        "z_edges": [round(float(x), 3) for x in np.linspace(-0.36, 0.36, 11)],
+        "z_ticks": ["+0.35", "0.0", "-0.35"],
+        "z_label": "MinD Carrier Expression Δlog₁₀(MinD) [Low MinD ← 0 → High MinD]",
+        "z_short": "Δlog₁₀(MinD Expr)",
+        "z_symbol": "MinD",
+    },
+    # -------------------------------------------------------------------------
+    # Global Shared (log₁₀ AU) Projections — exact 10-bin axes from PROJECTION_DEFS
+    # -------------------------------------------------------------------------
+    "d_vs_cargo_abs": {
         "z_col": "abs_log10_E",
-        "z_edges": [round(float(x), 3) for x in np.linspace(3.95, 4.75, 9)],
-        "z_label": "Absolute MinE Expression log₁₀(MinE [AU])",
-        "z_short": "log₁₀(MinE AU)",
+        "z_abs_col": "abs_log10_E",
+        "z_med_key": "e",
+        "is_global_abs": True,
+        "z_edges": [round(float(x), 3) for x in np.linspace(3.95, 4.75, 11)],
+        "z_ticks": ["4.75", "4.35", "3.95"],
+        "z_label": "Absolute MinE Expression log₁₀(MinE [AU]) [Global Mid = 4.35]",
+        "z_short": "log₁₀(MinE AU) [Mid 4.35]",
         "z_symbol": "MinE",
     },
     "damp_vs_cargo_abs": {
         "z_col": "abs_log10_E",
-        "z_edges": [round(float(x), 3) for x in np.linspace(3.95, 4.75, 9)],
-        "z_label": "Absolute MinE Expression log₁₀(MinE [AU])",
-        "z_short": "log₁₀(MinE AU)",
+        "z_abs_col": "abs_log10_E",
+        "z_med_key": "e",
+        "is_global_abs": True,
+        "z_edges": [round(float(x), 3) for x in np.linspace(3.95, 4.75, 11)],
+        "z_ticks": ["4.75", "4.35", "3.95"],
+        "z_label": "Absolute MinE Expression log₁₀(MinE [AU]) [Global Mid = 4.35]",
+        "z_short": "log₁₀(MinE AU) [Mid 4.35]",
         "z_symbol": "MinE",
-    },
-    "d_vs_e": {
-        "z_col": "abs_log10_Cargo",
-        "z_edges": [round(float(x), 3) for x in np.linspace(2.80, 4.28, 9)],
-        "z_label": "Absolute Client Cargo Expression log₁₀(Cargo [AU])",
-        "z_short": "log₁₀(Cargo AU)",
-        "z_symbol": "Cargo",
     },
     "d_vs_e_abs": {
         "z_col": "abs_log10_Cargo",
-        "z_edges": [round(float(x), 3) for x in np.linspace(2.80, 4.28, 9)],
-        "z_label": "Absolute Client Cargo Expression log₁₀(Cargo [AU])",
-        "z_short": "log₁₀(Cargo AU)",
+        "z_abs_col": "abs_log10_Cargo",
+        "z_med_key": "cargo",
+        "is_global_abs": True,
+        "z_edges": [round(float(x), 3) for x in np.linspace(2.80, 4.28, 11)],
+        "z_ticks": ["4.28", "3.54", "2.80"],
+        "z_label": "Absolute Client Cargo Expression log₁₀(Cargo [AU]) [Global Mid = 3.54]",
+        "z_short": "log₁₀(Cargo AU) [Mid 3.54]",
         "z_symbol": "Cargo",
-    },
-    "ed_vs_load": {
-        "z_col": "abs_log10_D",
-        "z_edges": [round(float(x), 3) for x in np.linspace(2.22, 3.62, 9)],
-        "z_label": "Absolute MinD Carrier Scale log₁₀(MinD [AU])",
-        "z_short": "log₁₀(MinD AU)",
-        "z_symbol": "MinD",
     },
     "ed_vs_load_abs": {
         "z_col": "abs_log10_D",
-        "z_edges": [round(float(x), 3) for x in np.linspace(2.22, 3.62, 9)],
-        "z_label": "Absolute MinD Carrier Scale log₁₀(MinD [AU])",
-        "z_short": "log₁₀(MinD AU)",
+        "z_abs_col": "abs_log10_D",
+        "z_med_key": "d",
+        "is_global_abs": True,
+        "z_edges": [round(float(x), 3) for x in np.linspace(2.22, 3.62, 11)],
+        "z_ticks": ["3.62", "2.92", "2.22"],
+        "z_label": "Absolute MinD Expression log₁₀(MinD [AU]) [Global Mid = 2.92]",
+        "z_short": "log₁₀(MinD AU) [Mid 2.92]",
         "z_symbol": "MinD",
     },
 }
@@ -115,6 +146,45 @@ METRIC_COLS = [
 ]
 
 
+def _build_slices_from_grouped_df(z_bdf: pd.DataFrame, d_idx_map: dict[float, int], n_d: int, z_centers: np.ndarray) -> list[dict]:
+    slices_list = []
+    for bz, sgrp in z_bdf.groupby("bz", observed=True):
+        bz_i = int(bz)
+        sgrp = sgrp.sort_values("dose_mM")
+        if len(sgrp) < 3:
+            continue
+        act_s = sgrp[sgrp["n_vox"] >= 1]
+        idx_arr = [d_idx_map[float(d)] for d in sgrp["dose_mM"].to_numpy()]
+        nv_med = float(act_s["n_vox"].median()) if not act_s.empty else 0.5
+        if nv_med == int(nv_med):
+            nv_med = int(nv_med)
+        else:
+            nv_med = round(nv_med, 1)
+
+        s_metrics = {}
+        has_any = False
+        for col_name, out_key, dec, _, _ in METRIC_COLS:
+            arr = [None] * n_d
+            vals = sgrp[col_name].to_numpy()
+            for i_pos, val in zip(idx_arr, vals):
+                cv = clean_val(val, dec)
+                arr[i_pos] = cv
+                if cv is not None and (out_key != "osc_pct" or cv > 0):
+                    has_any = True
+            s_metrics[out_key] = arr
+
+        if not has_any:
+            continue
+
+        slices_list.append({
+            "bz": bz_i,
+            "z": clean_val(z_centers[bz_i], 2),
+            "nv": nv_med,
+            "m": s_metrics,
+        })
+    return slices_list
+
+
 def compute_z_slices_for_projection(sub_0to5: pd.DataFrame, proj_key: str) -> dict:
     pdef = PROJECTION_DEFS[proj_key]
     zspec = Z_AXIS_SPECS[proj_key]
@@ -122,7 +192,7 @@ def compute_z_slices_for_projection(sub_0to5: pd.DataFrame, proj_key: str) -> di
     y_edges = np.asarray(pdef["y_edges"], dtype=np.float64)
     z_edges = np.asarray(zspec["z_edges"], dtype=np.float64)
     z_centers = 0.5 * (z_edges[:-1] + z_edges[1:])
-    nz = len(z_centers)
+    nz = len(z_centers)  # Always 10 bins (matching the 10x10 2D portraits!)
 
     col_map = {
         "ed_vs_load": ("dlog10_ED", "dlog10_Load"),
@@ -136,10 +206,16 @@ def compute_z_slices_for_projection(sub_0to5: pd.DataFrame, proj_key: str) -> di
     }
     x_col, y_col = col_map[proj_key]
     z_col = zspec["z_col"]
+    z_abs_col = zspec["z_abs_col"]
 
     xv = sub_0to5[x_col].to_numpy()
     yv = sub_0to5[y_col].to_numpy()
-    in_bounds = (xv >= x_edges[0]) & (xv <= x_edges[-1]) & (yv >= y_edges[0]) & (yv <= y_edges[-1])
+    zv = sub_0to5[z_col].to_numpy()
+    in_bounds = (
+        (xv >= x_edges[0]) & (xv <= x_edges[-1])
+        & (yv >= y_edges[0]) & (yv <= y_edges[-1])
+        & (zv >= z_edges[0]) & (zv <= z_edges[-1])
+    )
     sub_box = sub_0to5[in_bounds].copy()
     if sub_box.empty:
         return {}
@@ -150,33 +226,45 @@ def compute_z_slices_for_projection(sub_0to5: pd.DataFrame, proj_key: str) -> di
 
     target_cols = [c[0] for c in METRIC_COLS]
 
+    # 0. Whole-construct 10-bin Z profile (`_whole`) across all (bx, by) bins
+    d_whole_all = np.sort(sub_box["dose_mM"].unique())
+    d_whole_list = [clean_val(d, 3) for d in d_whole_all]
+    d_whole_map = {float(d): i for i, d in enumerate(d_whole_all)}
+    grp_w = sub_box.groupby(["bz", "dose_mM"], observed=True)
+    w_counts = grp_w["coup_norm"].count().rename("n_vox")
+    w_meds = grp_w[target_cols].median()
+    w_comb = pd.concat([w_counts, w_meds], axis=1).reset_index()
+    whole_slices = _build_slices_from_grouped_df(w_comb, d_whole_map, len(d_whole_all), z_centers)
+
+    meds_0mM = sub_0to5.attrs.get("medians_0mM", {})
+    med_z_val = meds_0mM.get(zspec["z_med_key"], None)
+
     # 1. Aggregate per (bx, by, bz, dose_mM)
     grp_z = sub_box.groupby(["bx", "by", "bz", "dose_mM"], observed=True)
     z_counts = grp_z["coup_norm"].count().rename("n_vox")
     z_meds = grp_z[target_cols].median()
     z_comb = pd.concat([z_counts, z_meds], axis=1).reset_index()
-
-    # Pre-group z_comb by (bx, by) for fast lookup
     z_by_bin = {k: g for k, g in z_comb.groupby(["bx", "by"], observed=True)}
 
     # 2. Assign Z-tertiles (0=Low, 1=Mid, 2=High) within each (bx, by) based on unique 3D voxels
-    vox_unique = sub_box[["bx", "by", "bin_D", "bin_E", "bin_Data", z_col]].drop_duplicates(
+    cols_u = list(dict.fromkeys(["bx", "by", "bin_D", "bin_E", "bin_Data", z_col, z_abs_col]))
+    vox_unique = sub_box[cols_u].drop_duplicates(
         ["bx", "by", "bin_D", "bin_E", "bin_Data"]
     ).copy()
 
     def _assign_tertile_group(df_g: pd.DataFrame) -> pd.DataFrame:
-        zv = df_g[z_col].to_numpy()
-        u_z = np.unique(zv)
+        z_arr = df_g[z_col].to_numpy()
+        u_z = np.unique(z_arr)
         if len(u_z) <= 1:
             df_g["zt"] = 1
         elif len(u_z) == 2:
-            df_g["zt"] = np.where(zv <= u_z[0], 0, 2)
+            df_g["zt"] = np.where(z_arr <= u_z[0], 0, 2)
         else:
-            q33, q67 = np.percentile(zv, [33.3, 66.7])
+            q33, q67 = np.percentile(z_arr, [33.3, 66.7])
             if q33 == q67:
-                df_g["zt"] = np.where(zv < q33, 0, np.where(zv > q67, 2, 1))
+                df_g["zt"] = np.where(z_arr < q33, 0, np.where(z_arr > q67, 2, 1))
             else:
-                df_g["zt"] = np.where(zv <= q33, 0, np.where(zv <= q67, 1, 2))
+                df_g["zt"] = np.where(z_arr <= q33, 0, np.where(z_arr <= q67, 1, 2))
         return df_g
 
     vox_unique = vox_unique.groupby(["bx", "by"], group_keys=False, observed=True).apply(_assign_tertile_group)
@@ -186,9 +274,17 @@ def compute_z_slices_for_projection(sub_0to5: pd.DataFrame, proj_key: str) -> di
         how="left",
     )
 
-    t_zmeds = vox_unique.groupby(["bx", "by", "zt"], observed=True)[z_col].agg(["count", "median"]).reset_index()
+    t_zmeds = vox_unique.groupby(["bx", "by", "zt"], observed=True).agg(
+        count=(z_col, "count"),
+        med_z=(z_col, "median"),
+        med_abs=(z_abs_col, "median"),
+    ).reset_index()
     t_zmed_lookup = {
-        (int(r["bx"]), int(r["by"]), int(r["zt"])): (int(r["count"]), round(float(r["median"]), 2))
+        (int(r["bx"]), int(r["by"]), int(r["zt"])): (
+            int(r["count"]),
+            round(float(r["med_z"]), 2),
+            round(float(r["med_abs"]), 2),
+        )
         for _, r in t_zmeds.iterrows()
     }
 
@@ -198,7 +294,13 @@ def compute_z_slices_for_projection(sub_0to5: pd.DataFrame, proj_key: str) -> di
     t_comb = pd.concat([t_counts, t_meds], axis=1).reset_index()
     t_by_bin = {k: g for k, g in t_comb.groupby(["bx", "by"], observed=True)}
 
-    bins_out = {}
+    bins_out = {
+        "_meta": {
+            "med_z": med_z_val,
+            "d": d_whole_list,
+            "whole_s": whole_slices,
+        }
+    }
     for (bx, by), z_bdf in z_by_bin.items():
         bx_i, by_i = int(bx), int(by)
         d_all = np.sort(z_bdf["dose_mM"].unique())
@@ -209,33 +311,7 @@ def compute_z_slices_for_projection(sub_0to5: pd.DataFrame, proj_key: str) -> di
         d_idx_map = {float(d): i for i, d in enumerate(d_all)}
         n_d = len(d_all)
 
-        slices_list = []
-        for bz, sgrp in z_bdf.groupby("bz", observed=True):
-            bz_i = int(bz)
-            sgrp = sgrp.sort_values("dose_mM")
-            act_s = sgrp[sgrp["n_vox"] >= 1]
-            # Keep Z-slice if it has at least 2 doses with active wave OR osc_pct data
-            if len(sgrp) < 3:
-                continue
-
-            idx_arr = [d_idx_map[float(d)] for d in sgrp["dose_mM"].to_numpy()]
-            nv_med = float(act_s["n_vox"].median()) if not act_s.empty else 0.5
-
-            s_metrics = {}
-            for col_name, out_key, dec, _, _ in METRIC_COLS:
-                arr = [None] * n_d
-                vals = sgrp[col_name].to_numpy()
-                for i_pos, val in zip(idx_arr, vals):
-                    arr[i_pos] = clean_val(val, dec)
-                s_metrics[out_key] = arr
-
-            slices_list.append({
-                "bz": bz_i,
-                "z": clean_val(z_centers[bz_i], 3),
-                "nv": clean_val(nv_med, 1),
-                "m": s_metrics,
-            })
-
+        slices_list = _build_slices_from_grouped_df(z_bdf, d_idx_map, n_d, z_centers)
         if not slices_list:
             continue
 
@@ -247,7 +323,7 @@ def compute_z_slices_for_projection(sub_0to5: pd.DataFrame, proj_key: str) -> di
                 tgrp = t_bdf[t_bdf["zt"] == zt_id].sort_values("dose_mM")
                 if len(tgrp) < 4:
                     continue
-                n_vox_t, z_med_t = t_zmed_lookup.get((bx_i, by_i, zt_id), (1, 0.0))
+                n_vox_t, z_med_t, z_abs_t = t_zmed_lookup.get((bx_i, by_i, zt_id), (1, 0.0, 0.0))
                 td_arr = tgrp["dose_mM"].to_numpy()
                 t_idx_arr = [d_idx_map[float(d)] for d in td_arr]
 
@@ -263,7 +339,7 @@ def compute_z_slices_for_projection(sub_0to5: pd.DataFrame, proj_key: str) -> di
                         "f": [
                             clean_val(fit["y0"], dec),
                             clean_val(fit["y5mM"], dec),
-                            clean_val(fit["ec50"], 3),
+                            clean_val(fit["ec50"], 2),
                             clean_val(fit["nhill"], 2),
                             clean_val(fit["r2"], 2),
                         ],
@@ -271,6 +347,7 @@ def compute_z_slices_for_projection(sub_0to5: pd.DataFrame, proj_key: str) -> di
 
                 tertiles_dict[t_key] = {
                     "z": z_med_t,
+                    "za": z_abs_t,
                     "nv": n_vox_t,
                     "m": t_metrics,
                 }
@@ -345,7 +422,7 @@ def main() -> None:
     mb_abs = len(str_abs.encode("utf-8")) / (1024 * 1024)
     mb_self = len(str_self.encode("utf-8")) / (1024 * 1024)
     print(
-        f"Built Z-slice bundles in {time.time() - t0:.1f}s:\n"
+        f"Built 10-bin Z-slice bundles in {time.time() - t0:.1f}s:\n"
         f"  - {js_abs_path.name}: {mb_abs:.2f} MB\n"
         f"  - {js_self_path.name}: {mb_self:.2f} MB"
     )

@@ -982,7 +982,7 @@
     const zSpec = window.getZSpecForProjection ? window.getZSpecForProjection(state.projectionKey) : { z_symbol: "3rd Var", z_short: "log₁₀(AU)" };
     const zHeatTitle = document.getElementById("dash-z-heat-title");
     if (zHeatTitle) {
-      zHeatTitle.textContent = `Clicked Bin (${bx}, ${by}) — 3rd-Var (${zSpec.z_symbol}) × Dose Portrait`;
+      zHeatTitle.textContent = `Clicked Bin (${bx}, ${by}) — Full 10-Bin ${zSpec.z_symbol} × Dose Portrait`;
     }
     const zHeatTag = document.getElementById("dash-z-heat-tag");
     if (zHeatTag) {
@@ -990,7 +990,7 @@
     }
     const zCurveTitle = document.getElementById("dash-z-curve-title");
     if (zCurveTitle) {
-      zCurveTitle.textContent = `Clicked Bin (${bx}, ${by}) — ${zSpec.z_symbol} [log₁₀ AU] Effect on ${qSpec.shortLabel}`;
+      zCurveTitle.textContent = `Clicked Bin (${bx}, ${by}) — ${zSpec.z_symbol} Effect on ${qSpec.shortLabel}`;
     }
     const zHeatCvs = document.getElementById("z-slice-heatmap-canvas");
     if (zHeatCvs && window.renderZSliceHeatmapCanvas) {
@@ -1080,15 +1080,15 @@
             </div>
           </div>
 
-          <!-- MIDDLE-LEFT: 3rd-Variable Core Sample Inspector — [Dose × 3rd Variable (log₁₀ AU)] Portrait -->
+          <!-- MIDDLE-LEFT: 3rd-Variable Core Sample Inspector — [Dose × 3rd Variable (10-Bin Full Axis)] Portrait -->
           <div class="tile-card" style="align-items:center;justify-content:space-between;border-color:rgba(167,139,250,0.45);">
             <div class="tile-card-header">
-              <span id="dash-z-heat-title" style="color:#c4b5fd;">Clicked Bin (${bx}, ${by}) — 3rd-Var × Dose Portrait</span>
+              <span id="dash-z-heat-title" style="color:#c4b5fd;">Clicked Bin (${bx}, ${by}) — Full 10-Bin 3rd-Var × Dose Portrait</span>
               <span class="mono-tag" id="dash-z-heat-tag" style="background:rgba(167,139,250,0.18);color:#c4b5fd;">3rd Var · ${qSpec.shortLabel}</span>
             </div>
-            <canvas id="z-slice-heatmap-canvas" data-w="${szDash.w}" data-h="${Math.round(szDash.h * 0.90)}" width="${szDash.w}" height="${Math.round(szDash.h * 0.90)}"></canvas>
+            <canvas id="z-slice-heatmap-canvas" data-w="${szDash.w}" data-h="${szDash.h}" width="${szDash.w}" height="${szDash.h}"></canvas>
             <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:4px;text-align:center;">
-              Drills along the hidden 3rd expression axis inside clicked bin (${bx}, ${by}) across all 6 Bt₂cAMP doses
+              Shown on the full 10-bin 3rd-variable axis: Bright Cyan Box = Clicked Bin Core Slice | Ghosted Backdrop &amp; Right Strip = Whole Portrait
             </div>
           </div>
 
@@ -1102,9 +1102,9 @@
                 <button class="zoom-btn-mini ${state.zSubMode === 'tertiles' ? 'active' : ''}" data-z-submode="tertiles" style="${state.zSubMode === 'tertiles' ? 'background:#38bdf8;color:#0f172a;font-weight:700;' : ''}">Low/Mid/High Curves</button>
               </div>
             </div>
-            <canvas id="z-slice-curves-canvas" data-w="${szDash.w}" data-h="${Math.round(szDash.h * 0.90)}" width="${szDash.w}" height="${Math.round(szDash.h * 0.90)}"></canvas>
+            <canvas id="z-slice-curves-canvas" data-w="${szDash.w}" data-h="${szDash.h}" width="${szDash.w}" height="${szDash.h}"></canvas>
             <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:4px;text-align:center;">
-              Left: Basal (0mM) vs Saturated (5mM) profile + linear slope (/dex) | Right: Stratified Low / Mid / High 3rd-var dose-response
+              Left: Core Slice (Cyan/Slate) vs Whole Portrait (Dotted) across full 10-bin axis | Right: Stratified Low / Mid / High 3rd-var curves
             </div>
           </div>
 
