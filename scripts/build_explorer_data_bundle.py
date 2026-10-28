@@ -842,6 +842,9 @@ def build_bundle() -> None:
     df_bins["cr_5mM_pct"] = 100.0 * (df_bins["cr_5mM_fit_fold"] - 1.0)
 
     # 2. Load Construct Metadata & Global Summaries
+    manifest_df = pd.read_csv(WORK_DIR / "library_manifest_verified.csv")
+    manifest_desc_map = dict(zip(manifest_df["design_id"].astype(str), manifest_df["construct_desc"].astype(str)))
+
     hill_sum_df = pd.read_csv(STAGE1_DIR / "master_library_construct_hill_summary.csv")
     hill_sum_df = hill_sum_df[~hill_sum_df["design_id"].astype(str).str.contains("rep2")].copy()
 
@@ -876,14 +879,17 @@ def build_bundle() -> None:
         md_v = int(row["minD_valency"])
         cg_v = int(row["cargo_valency"])
 
+        fha_lbl = "FHA1(R70A)" if mut_s == "R70A" else "FHA1(WT)"
+        sub_lbl = "PKAsub(T→A)" if mut_s == "TAmut" else "PKAsub"
         if ori_s == "upright":
-            carrier_domain = f"cterm-(FHA1_{mut_s})×{md_v}"
-            cargo_domain = f"GFP-(PKAsub)×{cg_v}"
-            arch_desc = f"Upright ({md_v}×{cg_v}): {md_v}× {mut_s} FHA1 domains on MinD anchor; {cg_v}× PKAsub on diffusive GFP client."
+            carrier_domain = f"{sub_lbl}×{md_v}-mCherry-MinD"
+            cargo_domain = f"EGFP-{fha_lbl}×{cg_v}"
+            arch_desc = f"Upright ({md_v}×{cg_v}): {md_v}× {sub_lbl} on mCherry-MinD carrier; {cg_v}× {fha_lbl} on diffusive EGFP cargo."
         else:
-            carrier_domain = f"cterm-(PKAsub)×{md_v}"
-            cargo_domain = f"GFP-(FHA1_{mut_s})×{cg_v}"
-            arch_desc = f"Inverse ({md_v}×{cg_v}): {md_v}× PKAsub domains on MinD anchor; {cg_v}× {mut_s} FHA1 on diffusive GFP client."
+            carrier_domain = f"{fha_lbl}×{md_v}-mCherry-MinD"
+            cargo_domain = f"{sub_lbl}×{cg_v}-EGFP"
+            arch_desc = f"Inverse ({md_v}×{cg_v}): {md_v}× {fha_lbl} on mCherry-MinD carrier; {cg_v}× {sub_lbl} on diffusive EGFP cargo."
+        construct_desc = manifest_desc_map.get(did, f"{carrier_domain}/MinE-EBFP/{cargo_domain}")
 
         b_row = basal_df[basal_df["design_id"] == did]
         c0_global = clean_val(b_row["Load_norm_0mM"].iloc[0], 3) if not b_row.empty else None
@@ -921,6 +927,7 @@ def build_bundle() -> None:
             "folder_name": str(row.get("folder_name", "")),
             "carrier_domain": carrier_domain,
             "cargo_domain": cargo_domain,
+            "construct_desc": construct_desc,
             "arch_desc": arch_desc,
             "is_clamped_0mM": (did == "3x3_WT_inverse"),
             "global_summary": {

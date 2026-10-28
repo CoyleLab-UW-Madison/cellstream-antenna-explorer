@@ -1,6 +1,8 @@
 # How to Backfill AlphaFold / PDB Structural Renderings
 
-The **Cellstream Antenna-Circuit Explorer** includes an interactive vector schematic generator (`js/antenna_schematics.js`) that draws the exact domain topology (`cterm` anchor, `FHA1` WT/R70A pockets, `PKAsub` phosphorylation sites, `mCherry` cargo, and `mTurquoise2-MinD` carrier carpet) for all 36 constructs out of the box.
+The **Cellstream Antenna-Circuit Explorer** includes an interactive vector schematic generator (`js/antenna_schematics.js`) that draws the exact domain topology (`mCherry-MinD` carrier, `MinE-EBFP` wave regulator, `FHA1` WT/R70A pockets, `PKAsub` phosphorylation sites, and `EGFP` cargo) for all 38 constructs out of the box:
+- **Upright (`WT Upright`, `R70A Upright`)**: `PKAsub`×M fused to `mCherry-MinD` carrier + `FHA1`×N fused to `EGFP` cargo (`PKAsubxM-mCherry-MinD/MinE-EBFP/EGFP-FHA1xN`).
+- **Inverse (`WT Inverse`, `R70A Inverse`, `TAmut Inverse`)**: `FHA1`×M fused to `mCherry-MinD` carrier + `PKAsub`×N fused to `EGFP` cargo (`FHA1xM-mCherry-MinD/MinE-EBFP/PKAsubxN-EGFP`).
 
 ## Adding Custom PDB / AlphaFold Images
 

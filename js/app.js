@@ -27,11 +27,11 @@
   const PROJECTION_ORDER = ["ed_vs_load", "damp_vs_cargo", "d_vs_e", "d_vs_cargo"];
 
   const FAMILIES = [
-    { id: "WT_upright",   mutation: "WT",    topology: "upright", label: "WT Upright",   badgeClass: "badge-wt-upr",   subtitle: "FHA1(WT) on MinD Carrier | PKAsub on Diffusive GFP Cargo" },
-    { id: "WT_inverse",   mutation: "WT",    topology: "inverse", label: "WT Inverse",   badgeClass: "badge-wt-inv",   subtitle: "PKAsub on MinD Carrier | FHA1(WT) on Diffusive GFP Cargo" },
-    { id: "R70A_upright", mutation: "R70A",  topology: "upright", label: "R70A Upright", badgeClass: "badge-r70a-upr", subtitle: "FHA1(R70A) Weak Reader on MinD | PKAsub on GFP Cargo" },
-    { id: "R70A_inverse", mutation: "R70A",  topology: "inverse", label: "R70A Inverse", badgeClass: "badge-r70a-inv", subtitle: "PKAsub on MinD Carrier | FHA1(R70A) Weak Reader on GFP Cargo" },
-    { id: "TAmut_ctrl",   mutation: "TAmut", topology: "inverse", label: "T→A Controls", badgeClass: "badge-tamut",    subtitle: "Non-Phosphorylatable PKAsub(T→A) Negative Controls (1×1 & 2×2 Inverse)" }
+    { id: "WT_upright",   mutation: "WT",    topology: "upright", label: "WT Upright",   badgeClass: "badge-wt-upr",   subtitle: "PKAsub on mCherry-MinD Carrier | EGFP-FHA1(WT) Diffusive Cargo" },
+    { id: "WT_inverse",   mutation: "WT",    topology: "inverse", label: "WT Inverse",   badgeClass: "badge-wt-inv",   subtitle: "FHA1(WT) on mCherry-MinD Carrier | PKAsub-EGFP Diffusive Cargo" },
+    { id: "R70A_upright", mutation: "R70A",  topology: "upright", label: "R70A Upright", badgeClass: "badge-r70a-upr", subtitle: "PKAsub on mCherry-MinD Carrier | EGFP-FHA1(R70A) Weak-Reader Cargo" },
+    { id: "R70A_inverse", mutation: "R70A",  topology: "inverse", label: "R70A Inverse", badgeClass: "badge-r70a-inv", subtitle: "FHA1(R70A) Weak Reader on mCherry-MinD | PKAsub-EGFP Diffusive Cargo" },
+    { id: "TAmut_ctrl",   mutation: "TAmut", topology: "inverse", label: "T→A Controls", badgeClass: "badge-tamut",    subtitle: "FHA1(WT) on mCherry-MinD | Non-Phosphorylatable PKAsub(T→A)-EGFP Negative Controls" }
   ];
 
   const VALENCIES_9 = ["1x1", "1x2", "1x3", "2x1", "2x2", "2x3", "3x1", "3x2", "3x3"];
@@ -398,18 +398,20 @@
     let configOptionsHTML = "";
     if (state.familyId === "TAmut_ctrl") {
       configOptionsHTML = `
-        <option value="1x1_TAmut_inverse" ${state.selectedCircuitA === "1x1_TAmut_inverse" ? "selected" : ""}>1×1 T→A Inverse (pCL334)</option>
-        <option value="2x2_TAmut_inverse" ${state.selectedCircuitA === "2x2_TAmut_inverse" ? "selected" : ""}>2×2 T→A Inverse (pCL335)</option>
+        <option value="1x1_TAmut_inverse" ${state.selectedCircuitA === "1x1_TAmut_inverse" ? "selected" : ""}>1×1 T→A Inverse (1×FHA1-MinD : 1×PKAsub[T→A]-EGFP)</option>
+        <option value="2x2_TAmut_inverse" ${state.selectedCircuitA === "2x2_TAmut_inverse" ? "selected" : ""}>2×2 T→A Inverse (2×FHA1-MinD : 2×PKAsub[T→A]-EGFP)</option>
       `;
     } else {
       const fam = FAMILIES.find(f => f.id === state.familyId) || FAMILIES[0];
+      const dDom = fam.topology === "upright" ? "PKAsub-MinD" : "FHA1-MinD";
+      const cDom = fam.topology === "upright" ? "EGFP-FHA1" : "PKAsub-EGFP";
       configOptionsHTML = VALENCIES_9.map(v => {
         const [md, cg] = v.split("x");
         const cid = `${v}_${fam.mutation}_${fam.topology}`;
         const cObj = CONSTRUCTS[cid];
         const c5 = cObj?.global_summary?.c5mM_sat;
         const c5Txt = (c5 !== null && c5 !== undefined) ? ` — C₅ₘₘ=${c5.toFixed(2)}` : "";
-        return `<option value="${v}" ${state.valency === v ? "selected" : ""}>${v} (${md}×MinD : ${cg}×Cargo)${c5Txt}</option>`;
+        return `<option value="${v}" ${state.valency === v ? "selected" : ""}>${v} (${md}×${dDom} : ${cg}×${cDom})${c5Txt}</option>`;
       }).join("");
     }
 
@@ -472,7 +474,7 @@
       <div class="sb-group">
         <div class="sb-label"><span>Circuit Family (FHA1 × Topology)</span></div>
         <select id="sb-sel-family" class="sb-select">
-          ${FAMILIES.map(f => `<option value="${f.id}" ${state.familyId === f.id ? "selected" : ""}>${f.label} — ${f.mutation === "TAmut" ? "Non-Phospho" : (f.topology === "upright" ? "Anchor FHA1" : "Anchor PKAsub")}</option>`).join("")}
+          ${FAMILIES.map(f => `<option value="${f.id}" ${state.familyId === f.id ? "selected" : ""}>${f.label} — ${f.mutation === "TAmut" ? "FHA1-MinD / PKAsub(T→A)-EGFP" : (f.topology === "upright" ? "PKAsub-MinD / EGFP-FHA1" : "FHA1-MinD / PKAsub-EGFP")}</option>`).join("")}
         </select>
       </div>
 
@@ -1257,15 +1259,18 @@
     const qSpec = window.QUADRANT_METRIC_MAP[state.quadMetricKey] || window.QUADRANT_METRICS[0];
     const sz = getAdaptiveTileSize("family3x3");
 
+    const dDomShort = fam.topology === "upright" ? "PKAsub-MinD" : "FHA1-MinD";
+    const cDomShort = fam.topology === "upright" ? "EGFP-FHA1" : "PKAsub-EGFP";
+
     let cellsHTML = `
-      <div class="matrix-hdr-cell">MinD \\ Cargo</div>
-      <div class="matrix-hdr-cell">1× Cargo Repeats</div>
-      <div class="matrix-hdr-cell">2× Cargo Repeats</div>
-      <div class="matrix-hdr-cell">3× Cargo Repeats</div>
+      <div class="matrix-hdr-cell">${dDomShort} \\ ${cDomShort}</div>
+      <div class="matrix-hdr-cell">1× ${cDomShort} Cargo</div>
+      <div class="matrix-hdr-cell">2× ${cDomShort} Cargo</div>
+      <div class="matrix-hdr-cell">3× ${cDomShort} Cargo</div>
     `;
 
     for (let r = 0; r < 3; r++) {
-      cellsHTML += `<div class="matrix-hdr-cell">${r + 1}× MinD Carrier</div>`;
+      cellsHTML += `<div class="matrix-hdr-cell">${r + 1}× ${dDomShort} Carrier</div>`;
       for (let col = 0; col < 3; col++) {
         const valStr = VALENCY_GRID[r][col];
         const cid = `${valStr}_${fam.mutation}_${fam.topology}`;
@@ -1423,10 +1428,10 @@
         </div>
 
         <div class="supergrid-2x2">
-          ${buildSuperQuadHTML("WT", "inverse", "wt-inv", "WT INVERSE (PKAsub on MinD | FHA1-WT on Cargo)")}
-          ${buildSuperQuadHTML("WT", "upright", "wt-upr", "WT UPRIGHT (FHA1-WT on MinD | PKAsub on Cargo)")}
-          ${buildSuperQuadHTML("R70A", "inverse", "r70a-inv", "R70A INVERSE (PKAsub on MinD | FHA1-R70A on Cargo)")}
-          ${buildSuperQuadHTML("R70A", "upright", "r70a-upr", "R70A UPRIGHT (FHA1-R70A on MinD | PKAsub on Cargo)")}
+          ${buildSuperQuadHTML("WT", "inverse", "wt-inv", "WT INVERSE (FHA1-WT on mCherry-MinD | PKAsub-EGFP Cargo)")}
+          ${buildSuperQuadHTML("WT", "upright", "wt-upr", "WT UPRIGHT (PKAsub on mCherry-MinD | EGFP-FHA1-WT Cargo)")}
+          ${buildSuperQuadHTML("R70A", "inverse", "r70a-inv", "R70A INVERSE (FHA1-R70A on mCherry-MinD | PKAsub-EGFP Cargo)")}
+          ${buildSuperQuadHTML("R70A", "upright", "r70a-upr", "R70A UPRIGHT (PKAsub on mCherry-MinD | EGFP-FHA1-R70A Cargo)")}
         </div>
 
         <!-- T->A Negative Controls Strip -->
@@ -1435,7 +1440,7 @@
             <span class="badge badge-tamut">NEGATIVE CONTROLS</span>
             <strong style="margin-left:8px;font-size:12.5px;">1×1 &amp; 2×2 Non-Phosphorylatable PKAsub(T→A) Inverse Controls</strong>
             <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">
-              Abolishes PKA phosphorylation of PKAsub on MinD (<code>1x1_TAmut_inverse</code> &amp; <code>2x2_TAmut_inverse</code>), confirming that cAMP-induced coupling requires phospho-threonine binding.
+              Pairs <code>FHA1(WT)-mCherry-MinD</code> with non-phosphorylatable <code>PKAsub(T→A)-EGFP</code> cargo (<code>1x1_TAmut_inverse</code>: pCL334/pCW003/pCW069 &amp; <code>2x2_TAmut_inverse</code>: pCL335/pCW003/pCW073), confirming that cAMP-induced coupling requires phospho-threonine binding.
             </div>
           </div>
           <div style="display:flex;gap:10px;">
@@ -1839,6 +1844,8 @@
         design_id: c.design_id,
         valency: c.valency,
         family: `${c.mutation} ${c.topology.toUpperCase()}`,
+        plasmids: c.plasmids || "",
+        construct_desc: c.construct_desc || `${c.carrier_domain}/MinE-EBFP/${c.cargo_domain}`,
         badgeClass: getBadgeClassForConstruct(c),
         c0_basal: gs.c0_basal ?? -999,
         c5mM_sat: gs.c5mM_sat ?? -999,
@@ -1870,7 +1877,8 @@
       <tr data-jump-cid="${r.id}" style="cursor:pointer;">
         <td><span class="badge ${r.badgeClass}">${r.family}</span></td>
         <td><strong>${r.valency}</strong></td>
-        <td><code>${r.design_id}</code></td>
+        <td style="font-size:10.5px;"><code>${r.plasmids}</code></td>
+        <td style="font-size:10.5px;color:#cbd5e1;"><code>${r.construct_desc}</code></td>
         <td style="color:#fbbf24;">${fmtCell(r.c0_basal, 3)}</td>
         <td style="color:#38bdf8;font-weight:700;">${fmtCell(r.c5mM_sat, 3)}</td>
         <td style="color:#34d399;font-weight:700;">${fmtCell(r.delta_coup, 3, "", true)}</td>
@@ -1895,8 +1903,9 @@
           <thead>
             <tr>
               <th data-sort="family">Family</th>
-              <th data-sort="valency">Valency</th>
-              <th data-sort="design_id">Design ID</th>
+              <th data-sort="valency">Valency (MinD×Cargo)</th>
+              <th data-sort="plasmids">Plasmids</th>
+              <th data-sort="construct_desc">Verified Construct (MinD / MinE / Cargo)</th>
               <th data-sort="c0_basal">Basal C₀ (0 mM)</th>
               <th data-sort="c5mM_sat">Sat. C₅ₘₘ (5 mM)</th>
               <th data-sort="delta_coup">Inducible ΔC</th>

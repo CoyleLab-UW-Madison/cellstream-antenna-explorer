@@ -184,7 +184,7 @@ window.PORTRAIT_METRICS = [
     unit: "%",
     decimals: 1,
     quadCurveKey: "carrier_fold",
-    description: "Percentage change in the underlying mTurquoise2-MinD carrier wave amplitude from 0 mM to 5 mM. Red (+ΔD%) = carrier wave power gain; Blue (−ΔD%) = high-load carrier wave damping."
+    description: "Percentage change in the underlying mCherry-MinD carrier wave amplitude from 0 mM to 5 mM. Red (+ΔD%) = carrier wave power gain; Blue (−ΔD%) = high-load carrier wave damping."
   },
   {
     key: "load_5mM_fold",
