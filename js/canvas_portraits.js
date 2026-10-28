@@ -319,6 +319,33 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
+    // In Global Shared Grid (Apples-to-Apples) mode, draw a gold diamond marker at this construct's own 0 mM median
+    const activeProjSpec = options.projectionSpec || window.ACTIVE_PROJECTION_SPEC || {};
+    if (activeProjSpec.is_global_abs && construct && Array.isArray(construct.construct_median_xy)) {
+      const xEdges = activeProjSpec.x_edges || [];
+      const yEdges = activeProjSpec.y_edges || [];
+      if (xEdges.length >= 2 && yEdges.length >= 2) {
+        const fx = (construct.construct_median_xy[0] - xEdges[0]) / Math.max(1e-9, xEdges[xEdges.length - 1] - xEdges[0]);
+        const fy = (construct.construct_median_xy[1] - yEdges[0]) / Math.max(1e-9, yEdges[yEdges.length - 1] - yEdges[0]);
+        const mx = padL + Math.max(0.03, Math.min(0.97, fx)) * plotW;
+        const my = padT + (1.0 - Math.max(0.03, Math.min(0.97, fy))) * plotH;
+        const r = 4.2;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(mx, my - r);
+        ctx.lineTo(mx + r, my);
+        ctx.lineTo(mx, my + r);
+        ctx.lineTo(mx - r, my);
+        ctx.closePath();
+        ctx.fillStyle = "#fde047";
+        ctx.fill();
+        ctx.strokeStyle = "#0f172a";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     // Highlight selected bin or quadrant if requested
     if (options.highlightBin && options.highlightBin.bx !== null && options.highlightBin.bx !== undefined) {
       const hbx = options.highlightBin.bx;

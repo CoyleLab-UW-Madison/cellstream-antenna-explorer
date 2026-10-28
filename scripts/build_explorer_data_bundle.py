@@ -37,7 +37,10 @@ Y_EDGES = np.linspace(-0.42, 0.42, 11)
 PROJECTION_DEFS = {
     "ed_vs_load": {
         "key": "ed_vs_load",
+        "is_global_abs": False,
+        "short_title": "Cargo/D_amp vs E/D (Self Δlog₁₀)",
         "shortLabel": "1. Stoichiometry Ratios: Cargo/D_amp vs E/D (Default)",
+        "subtitle": "Per-Construct Δlog₁₀(MinE/MinD) vs Δlog₁₀(Cargo/D_amp,0)",
         "name": "Stoichiometric Ratio Space — Δlog₁₀(Cargo/D_amp) vs Δlog₁₀(MinE/MinD)",
         "x_edges": [round(float(x), 3) for x in np.linspace(-0.32, 0.32, 11)],
         "y_edges": [round(float(y), 3) for y in np.linspace(-0.42, 0.42, 11)],
@@ -64,7 +67,10 @@ PROJECTION_DEFS = {
     },
     "damp_vs_cargo": {
         "key": "damp_vs_cargo",
+        "is_global_abs": False,
+        "short_title": "Cargo vs D_amp (Self Δlog₁₀)",
         "shortLabel": "2. Carrier Power vs Client: Cargo vs D_amp (E float)",
+        "subtitle": "Per-Construct Δlog₁₀(D_amp,0mM) vs Δlog₁₀(Cargo) · MinE floats",
         "name": "Carrier Wave Power vs Client Abundance — Δlog₁₀(Cargo) vs Δlog₁₀(D_amp,0)",
         "x_edges": [round(float(x), 3) for x in np.linspace(-0.36, 0.36, 11)],
         "y_edges": [round(float(y), 3) for y in np.linspace(-0.45, 0.45, 11)],
@@ -91,7 +97,10 @@ PROJECTION_DEFS = {
     },
     "d_vs_e": {
         "key": "d_vs_e",
+        "is_global_abs": False,
+        "short_title": "MinE vs MinD (Self Δlog₁₀)",
         "shortLabel": "3. MinDE Phase Plane: MinE vs MinD (Cargo float)",
+        "subtitle": "Per-Construct Δlog₁₀(MinD) vs Δlog₁₀(MinE) · Cargo floats",
         "name": "Classic MinDE Driver Phase Plane — Δlog₁₀(MinE) vs Δlog₁₀(MinD)",
         "x_edges": [round(float(x), 3) for x in np.linspace(-0.36, 0.36, 11)],
         "y_edges": [round(float(y), 3) for y in np.linspace(-0.28, 0.28, 11)],
@@ -118,7 +127,10 @@ PROJECTION_DEFS = {
     },
     "d_vs_cargo": {
         "key": "d_vs_cargo",
+        "is_global_abs": False,
+        "short_title": "Cargo vs MinD (Self Δlog₁₀)",
         "shortLabel": "4. Static Expression: Cargo vs MinD (E float)",
+        "subtitle": "Per-Construct Δlog₁₀(MinD) vs Δlog₁₀(Cargo) · MinE floats",
         "name": "Static Anchor vs Client Expression — Δlog₁₀(Cargo) vs Δlog₁₀(MinD)",
         "x_edges": [round(float(x), 3) for x in np.linspace(-0.36, 0.36, 11)],
         "y_edges": [round(float(y), 3) for y in np.linspace(-0.45, 0.45, 11)],
@@ -141,6 +153,131 @@ PROJECTION_DEFS = {
             "Q2_Fast_HiLoad": "Q2: HiD+HiCargo",
             "Q3_Slow_LoLoad": "Q3: LoD+LoCargo",
             "Q4_Fast_LoLoad": "Q4: HiD+LoCargo",
+        },
+    },
+    # =========================================================================
+    # GLOBAL ABSOLUTE (APPLES-TO-APPLES SHARED LIBRARY PLAYING FIELD)
+    # Fixed log10(AU) / log10(ratio) edges across all 38 constructs, centered
+    # at the pooled 38-construct 0 mM library median!
+    # =========================================================================
+    "ed_vs_load_abs": {
+        "key": "ed_vs_load_abs",
+        "is_global_abs": True,
+        "short_title": "Cargo/D_amp vs E/D [Global log₁₀ AU]",
+        "shortLabel": "1. Stoichiometry Ratios [Global Shared Grid]",
+        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(E/D) [Med 1.36] vs log₁₀(Cargo/D_amp) [Med -0.62]",
+        "name": "Global Stoichiometric Ratio Space — Absolute log₁₀(Cargo/D_amp,0) vs log₁₀(MinE/MinD)",
+        "x_edges": [round(float(x), 3) for x in np.linspace(1.36 - 0.44, 1.36 + 0.44, 11)],
+        "y_edges": [round(float(y), 3) for y in np.linspace(-0.62 - 0.72, -0.62 + 0.72, 11)],
+        "x_label": "Absolute Stoichiometry log₁₀(MinE_AU / MinD_AU) [Global Median = 1.36]",
+        "y_label": "Absolute Relative Load log₁₀(Cargo_AU / D_amp,0_AU) [Global Median = -0.62]",
+        "x_canvas_label": "log₁₀(MinE/MinD AU) [Med 1.36]",
+        "y_canvas_label": "log₁₀(Cargo/D_amp AU)",
+        "x_short": "log₁₀(E/D)",
+        "y_short": "log₁₀(Cargo/D)",
+        "x_ticks": ["0.92", "1.36", "1.80"],
+        "y_ticks": ["+0.10", "-0.62", "-1.34"],
+        "quad_labels": {
+            "Q1_Slow_HiLoad": "Q1: Global Slow (E/D<1.36) + Hi Load",
+            "Q2_Fast_HiLoad": "Q2: Global Fast (E/D≥1.36) + Hi Load",
+            "Q3_Slow_LoLoad": "Q3: Global Slow (E/D<1.36) + Lo Load",
+            "Q4_Fast_LoLoad": "Q4: Global Fast (E/D≥1.36) + Lo Load",
+        },
+        "quad_short": {
+            "Q1_Slow_HiLoad": "Q1: GlobSlow+HiLoad",
+            "Q2_Fast_HiLoad": "Q2: GlobFast+HiLoad",
+            "Q3_Slow_LoLoad": "Q3: GlobSlow+LoLoad",
+            "Q4_Fast_LoLoad": "Q4: GlobFast+LoLoad",
+        },
+    },
+    "damp_vs_cargo_abs": {
+        "key": "damp_vs_cargo_abs",
+        "is_global_abs": True,
+        "short_title": "Cargo vs D_amp [Global log₁₀ AU]",
+        "shortLabel": "2. Carrier Power vs Client [Global Shared Grid]",
+        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(D_amp,0 AU) [Med 4.18] vs log₁₀(Cargo AU) [Med 3.60]",
+        "name": "Global Carrier Wave Power vs Client Abundance — Absolute log₁₀(Cargo AU) vs log₁₀(D_amp,0 AU)",
+        "x_edges": [round(float(x), 3) for x in np.linspace(4.18 - 0.48, 4.18 + 0.48, 11)],
+        "y_edges": [round(float(y), 3) for y in np.linspace(3.60 - 0.62, 3.60 + 0.62, 11)],
+        "x_label": "Absolute Carrier Wave Amplitude log₁₀(D_amp,0mM [AU]) [Global Median = 4.18 (~15k AU)]",
+        "y_label": "Absolute Client Cargo Expression log₁₀(Cargo [AU]) [Global Median = 3.60 (~4k AU)]",
+        "x_canvas_label": "log₁₀(D_amp,0 AU) [Med 4.18]",
+        "y_canvas_label": "log₁₀(Cargo AU) [Med 3.60]",
+        "x_short": "log₁₀(D_amp AU)",
+        "y_short": "log₁₀(Cargo AU)",
+        "x_ticks": ["3.70", "4.18", "4.66"],
+        "y_ticks": ["4.22", "3.60", "2.98"],
+        "quad_labels": {
+            "Q1_Slow_HiLoad": "Q1: Global Weak D_amp (<4.18) + Hi Cargo",
+            "Q2_Fast_HiLoad": "Q2: Global Strong D_amp (≥4.18) + Hi Cargo",
+            "Q3_Slow_LoLoad": "Q3: Global Weak D_amp (<4.18) + Lo Cargo",
+            "Q4_Fast_LoLoad": "Q4: Global Strong D_amp (≥4.18) + Lo Cargo",
+        },
+        "quad_short": {
+            "Q1_Slow_HiLoad": "Q1: GlobWeakD+HiC",
+            "Q2_Fast_HiLoad": "Q2: GlobStrongD+HiC",
+            "Q3_Slow_LoLoad": "Q3: GlobWeakD+LoC",
+            "Q4_Fast_LoLoad": "Q4: GlobStrongD+LoC",
+        },
+    },
+    "d_vs_e_abs": {
+        "key": "d_vs_e_abs",
+        "is_global_abs": True,
+        "short_title": "MinE vs MinD [Global log₁₀ AU]",
+        "shortLabel": "3. MinDE Phase Plane [Global Shared Grid]",
+        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(MinD AU) [Med 2.98] vs log₁₀(MinE AU) [Med 4.37]",
+        "name": "Global MinDE Driver Phase Plane — Absolute log₁₀(MinE AU) vs log₁₀(MinD AU)",
+        "x_edges": [round(float(x), 3) for x in np.linspace(2.98 - 0.44, 2.98 + 0.44, 11)],
+        "y_edges": [round(float(y), 3) for y in np.linspace(4.37 - 0.35, 4.37 + 0.35, 11)],
+        "x_label": "Absolute MinD Expression log₁₀(MinD [AU]) [Global Median = 2.98 (~955 AU)]",
+        "y_label": "Absolute MinE Expression log₁₀(MinE [AU]) [Global Median = 4.37 (~23.4k AU)]",
+        "x_canvas_label": "log₁₀(MinD AU) [Med 2.98]",
+        "y_canvas_label": "log₁₀(MinE AU) [Med 4.37]",
+        "x_short": "log₁₀(MinD AU)",
+        "y_short": "log₁₀(MinE AU)",
+        "x_ticks": ["2.54", "2.98", "3.42"],
+        "y_ticks": ["4.72", "4.37", "4.02"],
+        "quad_labels": {
+            "Q1_Slow_HiLoad": "Q1: Global Lo MinD (<2.98) + Hi MinE",
+            "Q2_Fast_HiLoad": "Q2: Global Hi MinD (≥2.98) + Hi MinE",
+            "Q3_Slow_LoLoad": "Q3: Global Lo MinD (<2.98) + Lo MinE",
+            "Q4_Fast_LoLoad": "Q4: Global Hi MinD (≥2.98) + Lo MinE",
+        },
+        "quad_short": {
+            "Q1_Slow_HiLoad": "Q1: GlobLoD+HiE",
+            "Q2_Fast_HiLoad": "Q2: GlobHiD+HiE",
+            "Q3_Slow_LoLoad": "Q3: GlobLoD+LoE",
+            "Q4_Fast_LoLoad": "Q4: GlobHiD+LoE",
+        },
+    },
+    "d_vs_cargo_abs": {
+        "key": "d_vs_cargo_abs",
+        "is_global_abs": True,
+        "short_title": "Cargo vs MinD [Global log₁₀ AU]",
+        "shortLabel": "4. Static Expression [Global Shared Grid]",
+        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(MinD AU) [Med 2.98] vs log₁₀(Cargo AU) [Med 3.60]",
+        "name": "Global Static Anchor vs Client Expression — Absolute log₁₀(Cargo AU) vs log₁₀(MinD AU)",
+        "x_edges": [round(float(x), 3) for x in np.linspace(2.98 - 0.44, 2.98 + 0.44, 11)],
+        "y_edges": [round(float(y), 3) for y in np.linspace(3.60 - 0.62, 3.60 + 0.62, 11)],
+        "x_label": "Absolute Static MinD Expression log₁₀(MinD [AU]) [Global Median = 2.98 (~955 AU)]",
+        "y_label": "Absolute Client Cargo Expression log₁₀(Cargo [AU]) [Global Median = 3.60 (~4k AU)]",
+        "x_canvas_label": "log₁₀(MinD AU) [Med 2.98]",
+        "y_canvas_label": "log₁₀(Cargo AU) [Med 3.60]",
+        "x_short": "log₁₀(MinD AU)",
+        "y_short": "log₁₀(Cargo AU)",
+        "x_ticks": ["2.54", "2.98", "3.42"],
+        "y_ticks": ["4.22", "3.60", "2.98"],
+        "quad_labels": {
+            "Q1_Slow_HiLoad": "Q1: Global Lo MinD (<2.98) + Hi Cargo",
+            "Q2_Fast_HiLoad": "Q2: Global Hi MinD (≥2.98) + Hi Cargo",
+            "Q3_Slow_LoLoad": "Q3: Global Lo MinD (<2.98) + Lo Cargo",
+            "Q4_Fast_LoLoad": "Q4: Global Hi MinD (≥2.98) + Lo Cargo",
+        },
+        "quad_short": {
+            "Q1_Slow_HiLoad": "Q1: GlobLoD+HiC",
+            "Q2_Fast_HiLoad": "Q2: GlobHiD+HiC",
+            "Q3_Slow_LoLoad": "Q3: GlobLoD+LoC",
+            "Q4_Fast_LoLoad": "Q4: GlobHiD+LoC",
         },
     },
 }
@@ -307,12 +444,37 @@ def prepare_construct_voxel_table(vox: pd.DataFrame, design: str, did: str) -> p
     log_load = log_c - log_damp0
 
     d0_idx = d0.index
-    sub_0to5["dlog10_ED"] = log_ed - float(log_ed.loc[d0_idx].median())
-    sub_0to5["dlog10_Load"] = log_load - float(log_load.loc[d0_idx].median())
-    sub_0to5["dlog10_D"] = log_d - float(log_d.loc[d0_idx].median())
-    sub_0to5["dlog10_E"] = log_e - float(log_e.loc[d0_idx].median())
-    sub_0to5["dlog10_Cargo"] = log_c - float(log_c.loc[d0_idx].median())
-    sub_0to5["dlog10_Damp0"] = log_damp0 - float(log_damp0.loc[d0_idx].median())
+    med_ed = float(log_ed.loc[d0_idx].median())
+    med_load = float(log_load.loc[d0_idx].median())
+    med_d = float(log_d.loc[d0_idx].median())
+    med_e = float(log_e.loc[d0_idx].median())
+    med_c = float(log_c.loc[d0_idx].median())
+    med_damp0 = float(log_damp0.loc[d0_idx].median())
+
+    # 1. Per-construct 0 mM median-centered coordinates
+    sub_0to5["dlog10_ED"] = log_ed - med_ed
+    sub_0to5["dlog10_Load"] = log_load - med_load
+    sub_0to5["dlog10_D"] = log_d - med_d
+    sub_0to5["dlog10_E"] = log_e - med_e
+    sub_0to5["dlog10_Cargo"] = log_c - med_c
+    sub_0to5["dlog10_Damp0"] = log_damp0 - med_damp0
+
+    # 2. Global absolute log10(AU) / log10(ratio) coordinates (Apples-to-Apples shared playing field)
+    sub_0to5["abs_log10_ED"] = log_ed
+    sub_0to5["abs_log10_Load"] = log_load
+    sub_0to5["abs_log10_D"] = log_d
+    sub_0to5["abs_log10_E"] = log_e
+    sub_0to5["abs_log10_Cargo"] = log_c
+    sub_0to5["abs_log10_Damp0"] = log_damp0
+
+    sub_0to5.attrs["medians_0mM"] = {
+        "ed": round(med_ed, 3),
+        "load": round(med_load, 3),
+        "d": round(med_d, 3),
+        "e": round(med_e, 3),
+        "cargo": round(med_c, 3),
+        "damp0": round(med_damp0, 3),
+    }
 
     if "osc_fraction" in sub_0to5.columns:
         sub_0to5["osc_pct_col"] = 100.0 * sub_0to5["osc_fraction"]
@@ -325,7 +487,7 @@ def prepare_construct_voxel_table(vox: pd.DataFrame, design: str, did: str) -> p
 def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_clamped: bool = False) -> tuple[list[dict], dict]:
     """
     Given a prepared construct voxel dataframe `sub_0to5` and a `proj_key`
-    (`ed_vs_load`, `damp_vs_cargo`, `d_vs_e`, `d_vs_cargo`), computes:
+    (`ed_vs_load`, `damp_vs_cargo`, `d_vs_e`, `d_vs_cargo`, plus `_abs` variants), computes:
       1. `bins_list`: list of 2D bin objects (10x10 grid) with Hill fits AND empirical `traces` [med, q25, q75]
       2. `q_px_dict`: 4-Quadrant (`Q1..Q4`) pixel-voxel dose-response curves & Hill fits
     """
@@ -335,16 +497,19 @@ def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_cla
     x_centers = 0.5 * (x_edges[:-1] + x_edges[1:])
     y_centers = 0.5 * (y_edges[:-1] + y_edges[1:])
 
-    if proj_key == "ed_vs_load":
-        x_col, y_col = "dlog10_ED", "dlog10_Load"
-    elif proj_key == "damp_vs_cargo":
-        x_col, y_col = "dlog10_Damp0", "dlog10_Cargo"
-    elif proj_key == "d_vs_e":
-        x_col, y_col = "dlog10_D", "dlog10_E"
-    elif proj_key == "d_vs_cargo":
-        x_col, y_col = "dlog10_D", "dlog10_Cargo"
-    else:
+    col_map = {
+        "ed_vs_load": ("dlog10_ED", "dlog10_Load"),
+        "damp_vs_cargo": ("dlog10_Damp0", "dlog10_Cargo"),
+        "d_vs_e": ("dlog10_D", "dlog10_E"),
+        "d_vs_cargo": ("dlog10_D", "dlog10_Cargo"),
+        "ed_vs_load_abs": ("abs_log10_ED", "abs_log10_Load"),
+        "damp_vs_cargo_abs": ("abs_log10_Damp0", "abs_log10_Cargo"),
+        "d_vs_e_abs": ("abs_log10_D", "abs_log10_E"),
+        "d_vs_cargo_abs": ("abs_log10_D", "abs_log10_Cargo"),
+    }
+    if proj_key not in col_map:
         raise ValueError(f"Unknown projection: {proj_key}")
+    x_col, y_col = col_map[proj_key]
 
     xv = sub_0to5[x_col].to_numpy()
     yv = sub_0to5[y_col].to_numpy()
@@ -406,10 +571,10 @@ def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_cla
         metric_traces = {}
         for col_name, out_key, dec in [
             ("coup_norm", "coup", 3),
-            ("pct_F_vocoder", "fm_pct", 2),
-            ("fold_D_amp", "cr_fold", 3),
-            ("fold_Data_over_D_amp", "load_fold", 3),
-            ("fold_Data_norm_amp", "am_fold", 3),
+            ("pct_F_vocoder", "fm_pct", 1),
+            ("fold_D_amp", "cr_fold", 2),
+            ("fold_Data_over_D_amp", "load_fold", 2),
+            ("fold_Data_norm_amp", "am_fold", 2),
         ]:
             m_arr = bdf[f"{col_name}_med"].to_numpy()
             q25_arr = bdf[f"{col_name}_q25"].to_numpy().copy()
@@ -553,21 +718,26 @@ def compute_cell_quadrants_for_projection(c_sub: pd.DataFrame, proj_key: str) ->
     pdef = PROJECTION_DEFS[proj_key]
     x_edges = pdef["x_edges"]
     y_edges = pdef["y_edges"]
+    x_mid = 0.5 * (x_edges[0] + x_edges[-1])
+    y_mid = 0.5 * (y_edges[0] + y_edges[-1])
 
-    if proj_key == "ed_vs_load":
-        xv = c_sub["x_cell_med"].to_numpy()
-        yv = c_sub["y_cell_med"].to_numpy()
-    elif proj_key == "damp_vs_cargo":
-        xv = c_sub["dlog10_Damp_cell"].to_numpy()
-        yv = c_sub["dlog10_Cargo_cell"].to_numpy()
-    elif proj_key == "d_vs_e":
-        xv = c_sub["dlog10_D_cell"].to_numpy()
-        yv = c_sub["dlog10_E_cell"].to_numpy()
-    elif proj_key == "d_vs_cargo":
-        xv = c_sub["dlog10_D_cell"].to_numpy()
-        yv = c_sub["dlog10_Cargo_cell"].to_numpy()
-    else:
+    col_map = {
+        "ed_vs_load": ("x_cell_med", "y_cell_med"),
+        "damp_vs_cargo": ("dlog10_Damp_cell", "dlog10_Cargo_cell"),
+        "d_vs_e": ("dlog10_D_cell", "dlog10_E_cell"),
+        "d_vs_cargo": ("dlog10_D_cell", "dlog10_Cargo_cell"),
+        "ed_vs_load_abs": ("abs_ED_cell", "abs_Load_cell"),
+        "damp_vs_cargo_abs": ("abs_Damp_cell", "abs_Cargo_cell"),
+        "d_vs_e_abs": ("abs_D_cell", "abs_E_cell"),
+        "d_vs_cargo_abs": ("abs_D_cell", "abs_Cargo_cell"),
+    }
+    if proj_key not in col_map:
         return {}
+    xc, yc = col_map[proj_key]
+    if xc not in c_sub.columns or yc not in c_sub.columns:
+        return {}
+    xv = c_sub[xc].to_numpy()
+    yv = c_sub[yc].to_numpy()
 
     in_b = (xv >= x_edges[0]) & (xv <= x_edges[-1]) & (yv >= y_edges[0]) & (yv <= y_edges[-1])
     sub = c_sub[in_b].copy()
@@ -575,9 +745,9 @@ def compute_cell_quadrants_for_projection(c_sub: pd.DataFrame, proj_key: str) ->
         return {}
 
     sub["quadrant"] = np.where(
-        xv[in_b] < 0.0,
-        np.where(yv[in_b] >= 0.0, "Q1_Slow_HiLoad", "Q3_Slow_LoLoad"),
-        np.where(yv[in_b] >= 0.0, "Q2_Fast_HiLoad", "Q4_Fast_LoLoad"),
+        xv[in_b] < x_mid,
+        np.where(yv[in_b] >= y_mid, "Q1_Slow_HiLoad", "Q3_Slow_LoLoad"),
+        np.where(yv[in_b] >= y_mid, "Q2_Fast_HiLoad", "Q4_Fast_LoLoad"),
     )
 
     cols_c = ["Load_norm_med", "F_med", "D_norm_amp_med", "Data_norm_amp_med", "Load_med", "f_osc_cell_pct"]
@@ -814,7 +984,10 @@ def build_bundle() -> None:
         else:
             sub_0to5 = pd.DataFrame()
 
-        # Prepare construct's single cells with 0 mM centered coordinates
+        meds_0mM = sub_0to5.attrs.get("medians_0mM", {}) if not sub_0to5.empty else {}
+        cmeta["medians_0mM_log10"] = meds_0mM
+
+        # Prepare construct's single cells with both 0 mM self-centered AND global absolute coordinates
         c_cells = act_cells[act_cells["design_id"] == did].copy()
         if is_clamped:
             c_cells = c_cells[c_cells["dose_mM"] >= 0.20].copy()
@@ -827,8 +1000,36 @@ def build_bundle() -> None:
             c_cells["dlog10_Cargo_cell"] = c_cells["raw_log10_Cargo"] - float(c0_cells["raw_log10_Cargo"].median())
             c_cells["dlog10_E_cell"] = c_cells["raw_log10_E"] - float(c0_cells["raw_log10_E"].median())
 
-        # Compute all 4 projections
-        for proj_key in ("ed_vs_load", "damp_vs_cargo", "d_vs_e", "d_vs_cargo"):
+            # Global absolute cell coordinates anchored to the construct's 0 mM voxel log10(AU) medians
+            c_cells["abs_ED_cell"] = c_cells["x_cell_med"] + meds_0mM.get("ed", 1.36)
+            c_cells["abs_Load_cell"] = c_cells["y_cell_med"] + meds_0mM.get("load", -0.62)
+            c_cells["abs_Damp_cell"] = c_cells["dlog10_Damp_cell"] + meds_0mM.get("damp0", 4.18)
+            c_cells["abs_Cargo_cell"] = c_cells["dlog10_Cargo_cell"] + meds_0mM.get("cargo", 3.60)
+            c_cells["abs_D_cell"] = c_cells["dlog10_D_cell"] + meds_0mM.get("d", 2.98)
+            c_cells["abs_E_cell"] = c_cells["dlog10_E_cell"] + meds_0mM.get("e", 4.37)
+
+        med_xy_map = {
+            "ed_vs_load": [0.0, 0.0],
+            "damp_vs_cargo": [0.0, 0.0],
+            "d_vs_e": [0.0, 0.0],
+            "d_vs_cargo": [0.0, 0.0],
+            "ed_vs_load_abs": [meds_0mM.get("ed", 1.36), meds_0mM.get("load", -0.62)],
+            "damp_vs_cargo_abs": [meds_0mM.get("damp0", 4.18), meds_0mM.get("cargo", 3.60)],
+            "d_vs_e_abs": [meds_0mM.get("d", 2.98), meds_0mM.get("e", 4.37)],
+            "d_vs_cargo_abs": [meds_0mM.get("d", 2.98), meds_0mM.get("cargo", 3.60)],
+        }
+
+        # Compute all 8 projections (4 Self-Centered + 4 Global Absolute Apples-to-Apples)
+        for proj_key in (
+            "ed_vs_load",
+            "damp_vs_cargo",
+            "d_vs_e",
+            "d_vs_cargo",
+            "ed_vs_load_abs",
+            "damp_vs_cargo_abs",
+            "d_vs_e_abs",
+            "d_vs_cargo_abs",
+        ):
             if not sub_0to5.empty:
                 p_bins, p_q_px = compute_projection_from_voxels(sub_0to5, proj_key, is_clamped=is_clamped)
             else:
@@ -889,13 +1090,14 @@ def build_bundle() -> None:
 
             p_q_cell = compute_cell_quadrants_for_projection(c_cells, proj_key)
             cmeta["projections"][proj_key] = {
+                "construct_median_xy": med_xy_map.get(proj_key, [0.0, 0.0]),
                 "bins_2d": p_bins,
                 "quadrants_pixel": p_q_px,
                 "quadrants_cell": p_q_cell,
             }
 
     bundle = {
-        "version": "1.2.0",
+        "version": "1.3.0",
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "grid_spec": {
             "nx": 10,
@@ -917,7 +1119,7 @@ def build_bundle() -> None:
     js_path.write_text(f"window.ANTENNA_LIBRARY_DATA = {json_str};\n", encoding="utf-8")
 
     sz_mb = len(json_str.encode("utf-8")) / (1024 * 1024)
-    print(f"Compiled {len(constructs_meta)} constructs × 4 projections into {json_path.name} and {js_path.name} ({sz_mb:.2f} MB) in {time.time() - t0:.2f}s")
+    print(f"Compiled {len(constructs_meta)} constructs × 8 projections (4 Self + 4 Global Apples-to-Apples) into {json_path.name} and {js_path.name} ({sz_mb:.2f} MB) in {time.time() - t0:.2f}s")
 
 
 if __name__ == "__main__":

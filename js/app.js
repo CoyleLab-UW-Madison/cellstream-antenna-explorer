@@ -49,7 +49,12 @@
     selectedCircuitB: "2x2_WT_upright",
 
     // Active 2D Coordinate Projection ("ed_vs_load" | "damp_vs_cargo" | "d_vs_e" | "d_vs_cargo")
-    projectionKey: "ed_vs_load",
+    projectionBaseKey: "ed_vs_load",
+    // Coordinate Reference Frame:
+    //   "self"   -> Self-Centered Δlog₁₀ (each construct centered on its own 0 mM median)
+    //   "global" -> Apples-to-Apples Global Shared log₁₀(AU) (all 38 constructs on identical physical bins)
+    coordNormMode: "global",
+    projectionKey: "ed_vs_load_abs",
 
     // Single-Circuit sub-view layout ("dashboard_2x2" matches the user's mockup!)
     focus: "dashboard_2x2",         // "dashboard_2x2" | "all_portraits" | "all_quads" | "pair_metrics"
@@ -86,10 +91,15 @@
   };
 
   /**
-   * Synchronizes the active 2D coordinate projection (`state.projectionKey`) across all constructs
-   * and updates `window.ACTIVE_PROJECTION_SPEC` + `DATA.grid_spec`.
+   * Synchronizes the active 2D coordinate projection (`state.projectionBaseKey` + `state.coordNormMode`)
+   * across all constructs and updates `window.ACTIVE_PROJECTION_SPEC` + `DATA.grid_spec`.
    */
   function syncActiveProjection() {
+    const candidateKey = state.coordNormMode === "global"
+      ? `${state.projectionBaseKey}_abs`
+      : state.projectionBaseKey;
+    state.projectionKey = PROJECTION_DEFS[candidateKey] ? candidateKey : state.projectionBaseKey;
+
     const pSpec = PROJECTION_DEFS[state.projectionKey] || PROJECTION_DEFS.ed_vs_load || {
       key: "ed_vs_load",
       short_title: "Cargo/D_amp vs E/D (Stoichiometric Ratio)",
@@ -126,11 +136,12 @@
     }
     for (const c of Object.values(CONSTRUCTS)) {
       if (c && c.projections) {
-        const projData = c.projections[state.projectionKey] || c.projections.ed_vs_load;
+        const projData = c.projections[state.projectionKey] || c.projections[state.projectionBaseKey] || c.projections.ed_vs_load;
         if (projData) {
           c.bins_2d = projData.bins_2d || [];
           c.quadrants_pixel = projData.quadrants_pixel || {};
           c.quadrants_cell = projData.quadrants_cell || {};
+          c.construct_median_xy = projData.construct_median_xy || null;
         }
       }
     }
@@ -275,10 +286,14 @@
     let html = `
       <div class="tt-title">${construct.valency} ${construct.mutation} ${construct.topology.toUpperCase()} — Bin (${bx}, ${by}) [Click to Plot Curve]</div>
       <div class="tt-row"><span>Projection:</span><span class="tt-val" style="color:var(--accent);">${projSpec.short_title}</span></div>
+      <div class="tt-row"><span>Ref Frame:</span><span class="tt-val" style="color:${projSpec.is_global_abs ? "#fbbf24" : "#38bdf8"};">${projSpec.is_global_abs ? "Global Shared (log₁₀ AU)" : "Self-Centered (Δlog₁₀ vs 0mM)"}</span></div>
       <div class="tt-row"><span>Quadrant:</span><span class="tt-val">${qLabel}</span></div>
       <div class="tt-row"><span>${projSpec.x_short || "X"}:</span><span class="tt-val">[${xRanges[0].toFixed(2)}, ${xRanges[1].toFixed(2)}]</span></div>
       <div class="tt-row"><span>${projSpec.y_short || "Y"}:</span><span class="tt-val">[${yRanges[0].toFixed(2)}, ${yRanges[1].toFixed(2)}]</span></div>
     `;
+    if (projSpec.is_global_abs && Array.isArray(construct.construct_median_xy)) {
+      html += `<div class="tt-row"><span>0mM Median (◆):</span><span class="tt-val" style="color:#fbbf24;">(${construct.construct_median_xy[0].toFixed(2)}, ${construct.construct_median_xy[1].toFixed(2)})</span></div>`;
+    }
 
     if (!bin) {
       html += `<div class="tt-row" style="margin-top:4px;color:#f87171;"><span>Status:</span><span class="tt-val">Unpopulated / Quenched</span></div>`;
@@ -332,8 +347,11 @@
         </span>
       </div>
       <div class="hud-chip">
-        <span class="hud-chip-lbl">2D Projection (Key: P)</span>
-        <span class="hud-chip-val" style="color:var(--accent);font-size:11.5px;">${projSpec.short_title}</span>
+        <span class="hud-chip-lbl">2D Projection (Key: P | G)</span>
+        <span class="hud-chip-val" style="color:var(--accent);font-size:11.5px;">
+          ${projSpec.short_title}
+          <span style="color:${state.coordNormMode === "global" ? "#fbbf24" : "#94a3b8"};font-size:10.5px;margin-left:4px;">[${state.coordNormMode === "global" ? "Global log₁₀ AU ◆" : "Self Δlog₁₀"}]</span>
+        </span>
       </div>
       <div class="hud-chip">
         <span class="hud-chip-lbl">Coupling C₀ → C₅ₘₘ (ΔC)</span>
@@ -488,11 +506,27 @@
         <select id="sb-sel-projection" class="sb-select" style="border-color:#3b4c73;">
           ${PROJECTION_ORDER.map((pk, idx) => {
             const p = PROJECTION_DEFS[pk] || {};
-            return `<option value="${pk}" ${state.projectionKey === pk ? "selected" : ""}>${idx + 1}. ${p.short_title || pk}</option>`;
+            return `<option value="${pk}" ${state.projectionBaseKey === pk ? "selected" : ""}>${idx + 1}. ${p.short_title || pk}</option>`;
           }).join("")}
         </select>
         <div style="font-size:10.2px;color:var(--muted);font-family:var(--font-mono);margin-top:3px;line-height:1.35;">
           ${projSpec.subtitle || ""}
+        </div>
+      </div>
+
+      <div class="sb-group">
+        <div class="sb-label">
+          <span>Coordinate Reference Frame</span>
+          <span style="font-family:var(--font-mono);color:#fbbf24;font-size:10px;">Key: G</span>
+        </div>
+        <div class="sb-seg-row">
+          <button class="sb-seg-btn ${state.coordNormMode === "global" ? "active" : ""}" data-sb-coordnorm="global" title="All 38 constructs share the exact same physical log₁₀(AU) bins for direct apples-to-apples comparison">Apples-to-Apples (log₁₀ AU)</button>
+          <button class="sb-seg-btn ${state.coordNormMode === "self" ? "active" : ""}" data-sb-coordnorm="self" title="Each construct is median-centered at its own 0 mM population median (Δlog₁₀ = 0)">Self-Centered (Δlog₁₀)</button>
+        </div>
+        <div style="font-size:10px;color:${state.coordNormMode === "global" ? "#fbbf24" : "var(--muted)"};font-family:var(--font-mono);margin-top:3px;line-height:1.35;">
+          ${state.coordNormMode === "global"
+            ? `◆ Gold Diamond = Construct's 0 mM Median${Array.isArray(c.construct_median_xy) ? ` (${c.construct_median_xy[0].toFixed(2)}, ${c.construct_median_xy[1].toFixed(2)})` : ""} vs Fixed Library Crosshair`
+            : "Crosshair (0, 0) = Each construct's own 0 mM population median"}
         </div>
       </div>
 
@@ -647,11 +681,19 @@
     const selProj = document.getElementById("sb-sel-projection");
     if (selProj) {
       selProj.addEventListener("change", e => {
-        state.projectionKey = e.target.value;
+        state.projectionBaseKey = e.target.value;
         syncActiveProjection();
         updateUI();
       });
     }
+
+    sbCtrl.querySelectorAll("[data-sb-coordnorm]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.coordNormMode = btn.dataset.sbCoordnorm;
+        syncActiveProjection();
+        updateUI();
+      });
+    });
 
     const selPmetric = document.getElementById("sb-sel-pmetric");
     if (selPmetric) {
@@ -1959,8 +2001,12 @@
         state.dataSource = state.dataSource === "pixel" ? "cell" : "pixel";
         updateUI();
       } else if (e.key.toLowerCase() === "p") {
-        const curIdx = PROJECTION_ORDER.indexOf(state.projectionKey);
-        state.projectionKey = PROJECTION_ORDER[(curIdx + 1) % PROJECTION_ORDER.length];
+        const curIdx = PROJECTION_ORDER.indexOf(state.projectionBaseKey);
+        state.projectionBaseKey = PROJECTION_ORDER[(curIdx + 1) % PROJECTION_ORDER.length];
+        syncActiveProjection();
+        updateUI();
+      } else if (e.key.toLowerCase() === "g") {
+        state.coordNormMode = state.coordNormMode === "global" ? "self" : "global";
         syncActiveProjection();
         updateUI();
       }
