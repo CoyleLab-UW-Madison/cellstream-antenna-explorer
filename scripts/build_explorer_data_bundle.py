@@ -382,84 +382,69 @@ def clean_val(val, digits: int = 4):
 
 def prepare_construct_voxel_table(vox: pd.DataFrame, design: str, did: str) -> pd.DataFrame:
     """
-    Filters and normalizes the matched 3D voxel table for a construct, computing all four
-    0 mM reference coordinates (`dlog10_ED`, `dlog10_Load`, `dlog10_D`, `dlog10_E`, `dlog10_Cargo`, `dlog10_Damp0`).
+    Filters and normalizes the unclipped 3D voxel table for a construct, computing all four
+    0 mM reference coordinates (`dlog10_ED`, `dlog10_Load`, `dlog10_D`, `dlog10_E`, `dlog10_Cargo`, `dlog10_Damp0`)
+    as well as global shared log10(AU) coordinates without 0 mM penetrance censoring.
     """
     sub_d = vox[vox["design"].astype(str) == design].copy()
     if sub_d.empty:
         return pd.DataFrame()
 
     is_clamped = (did == "3x3_WT_inverse")
-    if is_clamped:
-        sub_0to5 = sub_d[
-            (sub_d["bin_D"] >= 1)
-            & (sub_d["Data_center"] >= 800.0)
-            & (sub_d["dose_mM"] <= 5.05)
-        ].copy()
-        if sub_0to5.empty:
-            return pd.DataFrame()
+    min_data_au = 600.0 if is_clamped else 200.0
+    sub_0to5 = sub_d[
+        (sub_d["bin_D"] >= 1)
+        & (sub_d["D_center"] >= 150.0)
+        & (sub_d["Data_center"] >= min_data_au)
+        & (sub_d["n_doses_present"] >= 4)
+        & (sub_d["dose_mM"] <= 5.05)
+    ].copy()
+    if sub_0to5.empty:
+        return pd.DataFrame()
 
-        # Active oscillating voxel mask (count_osc >= 8 and valid F_vocoder)
-        act_mask = (sub_0to5["count_osc"] >= 8) & sub_0to5["F_vocoder"].notna()
-        fm_onset_rows = sub_0to5[act_mask & (sub_0to5["dose_mM"] >= 0.20) & (sub_0to5["F_vocoder"] >= 14.0)].sort_values("dose_mM")
-        f0_global = float(fm_onset_rows["F_vocoder"].iloc[:200].median()) if not fm_onset_rows.empty else 27.5
-        f0_by_vox = fm_onset_rows.groupby(["bin_D", "bin_E", "bin_Data"])["F_vocoder"].first()
-        vox_idx = pd.MultiIndex.from_frame(sub_0to5[["bin_D", "bin_E", "bin_Data"]])
-        sub_0to5["F_vocoder_0mM"] = f0_by_vox.reindex(vox_idx).to_numpy()
-        sub_0to5["F_vocoder_0mM"] = sub_0to5["F_vocoder_0mM"].fillna(f0_global)
+    # Active oscillating voxel mask at each (voxel, dose_mM)
+    act_mask = (sub_0to5["count_osc"] >= 8) & sub_0to5["D_norm_amp"].notna() & sub_0to5["Data_norm_amp"].notna()
 
-        dn0_ref = sub_0to5["D_norm_amp_0mM"].fillna(float(sub_0to5.loc[act_mask, "D_norm_amp"].median())).clip(lower=1e-6)
-        dan0_ref = sub_0to5["Data_norm_amp_0mM"].fillna(float(sub_0to5.loc[act_mask, "Data_norm_amp"].median())).clip(lower=1e-6)
-        ld0_ref = (dan0_ref / dn0_ref).clip(lower=1e-6)
+    dn0_ref = sub_0to5["D_norm_amp_0mM"].clip(lower=1e-6)
+    dan0_ref = sub_0to5["Data_norm_amp_0mM"].clip(lower=1e-6)
+    da0_ref = sub_0to5["D_amp_0mM"].clip(lower=1e-6)
+    ld0_ref = (dan0_ref / dn0_ref).clip(lower=1e-6)
 
-        sub_0to5["coup_norm"] = np.where(
-            act_mask,
-            sub_0to5["Data_norm_amp"] / sub_0to5["D_norm_amp"].clip(lower=1e-9),
-            np.nan,
-        )
-        sub_0to5["fold_D_amp"] = np.where(
-            act_mask,
-            sub_0to5["D_norm_amp"] / dn0_ref,
-            np.nan,
-        )
-        sub_0to5["fold_Data_norm_amp"] = np.where(
-            act_mask,
-            sub_0to5["Data_norm_amp"] / dan0_ref,
-            np.nan,
-        )
-        sub_0to5["fold_Data_over_D_amp"] = np.where(
-            act_mask,
-            sub_0to5["coup_norm"] / ld0_ref,
-            np.nan,
-        )
-        fm_valid_mask = act_mask & (sub_0to5["dose_mM"] >= 0.20) & (sub_0to5["F_vocoder"] >= 14.0)
-        sub_0to5["pct_F_vocoder"] = np.where(
-            fm_valid_mask,
-            100.0 * (sub_0to5["F_vocoder"] - sub_0to5["F_vocoder_0mM"]) / sub_0to5["F_vocoder_0mM"].clip(lower=1e-6),
-            np.nan,
-        )
-    else:
-        sub_d["coup_norm"] = sub_d["Data_norm_amp"] / sub_d["D_norm_amp"].clip(lower=1e-9)
-        if "fold_Data_over_D_amp" not in sub_d.columns:
-            sub_d["fold_Data_over_D_amp"] = sub_d["fold_Data_amp"] / sub_d["fold_D_amp"].clip(lower=1e-9)
+    sub_0to5["coup_norm"] = np.where(
+        act_mask,
+        sub_0to5["Data_norm_amp"] / sub_0to5["D_norm_amp"].clip(lower=1e-9),
+        np.nan,
+    )
+    sub_0to5["fold_D_amp"] = np.where(
+        act_mask,
+        sub_0to5["D_amp"] / da0_ref,
+        np.nan,
+    )
+    sub_0to5["fold_Data_norm_amp"] = np.where(
+        act_mask,
+        sub_0to5["Data_norm_amp"] / dan0_ref,
+        np.nan,
+    )
+    sub_0to5["fold_Data_over_D_amp"] = np.where(
+        act_mask,
+        sub_0to5["coup_norm"] / ld0_ref,
+        np.nan,
+    )
+    fm_valid_mask = (
+        act_mask
+        & sub_0to5["F_vocoder"].notna()
+        & (sub_0to5["F_vocoder"] >= 14.0)
+        & ((sub_0to5["osc_fraction_0mM"] >= 0.01) | (sub_0to5["dose_mM"] >= 0.15))
+    )
+    sub_0to5["pct_F_vocoder"] = np.where(
+        fm_valid_mask,
+        100.0 * (sub_0to5["F_vocoder"] - sub_0to5["F_vocoder_0mM"]) / sub_0to5["F_vocoder_0mM"].clip(lower=1e-6),
+        np.nan,
+    )
 
-        n_tot = int(sub_d["dose_mM"].nunique())
-        min_d = min(10, max(8, n_tot - 1))
-        sub_comm = sub_d[sub_d["n_doses_present"] >= min_d].copy()
-        if "osc_fraction_0mM" in sub_comm.columns:
-            osc_ok = sub_comm["osc_fraction_0mM"].isna() | (sub_comm["osc_fraction_0mM"] >= 0.15)
-            if osc_ok.sum() >= 150:
-                sub_comm = sub_comm[osc_ok].copy()
-        if "D_center" in sub_comm.columns:
-            sub_comm = sub_comm[sub_comm["D_center"] >= 180.0].copy()
-
-        sub_0to5 = sub_comm[sub_comm["dose_mM"] <= 5.05].copy()
-        if sub_0to5.empty:
-            return pd.DataFrame()
-
-    d0 = sub_0to5[np.isclose(sub_0to5["dose_mM"], 0.0)]
-    if d0.empty:
-        d0 = sub_0to5
+    u_vox = sub_0to5.drop_duplicates(["bin_D", "bin_E", "bin_Data"])
+    if u_vox.empty:
+        u_vox = sub_0to5
 
     log_d = np.log10(sub_0to5["D_center"].clip(lower=1e-9))
     log_e = np.log10(sub_0to5["E_center"].clip(lower=1e-9))
@@ -468,13 +453,13 @@ def prepare_construct_voxel_table(vox: pd.DataFrame, design: str, did: str) -> p
     log_ed = log_e - log_d
     log_load = log_c - log_damp0
 
-    d0_idx = d0.index
-    med_ed = float(log_ed.loc[d0_idx].median())
-    med_load = float(log_load.loc[d0_idx].median())
-    med_d = float(log_d.loc[d0_idx].median())
-    med_e = float(log_e.loc[d0_idx].median())
-    med_c = float(log_c.loc[d0_idx].median())
-    med_damp0 = float(log_damp0.loc[d0_idx].median())
+    u_idx = u_vox.index
+    med_ed = float(log_ed.loc[u_idx].median())
+    med_load = float(log_load.loc[u_idx].median())
+    med_d = float(log_d.loc[u_idx].median())
+    med_e = float(log_e.loc[u_idx].median())
+    med_c = float(log_c.loc[u_idx].median())
+    med_damp0 = float(log_damp0.loc[u_idx].median())
 
     # 1. Per-construct 0 mM median-centered coordinates
     sub_0to5["dlog10_ED"] = log_ed - med_ed
@@ -569,15 +554,13 @@ def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_cla
     combined = pd.concat([counts, f0_meds, meds.add_suffix("_med"), q25s.add_suffix("_q25"), q75s.add_suffix("_q75")], axis=1).reset_index()
 
     bins_list = []
-    min_doses_req = 4 if is_clamped else 6
+    min_doses_req = 4
     for (bx, by), bdf in combined.groupby(["bx", "by"], observed=True):
         bdf = bdf.sort_values("dose_mM")
         d_arr = bdf["dose_mM"].to_numpy()
         n_arr = bdf["n_vox"].to_numpy()
         act_d = d_arr[n_arr >= 1]
-        if len(act_d) < min_doses_req or not np.any(act_d >= 1.5):
-            continue
-        if not is_clamped and not np.any(act_d <= 0.11):
+        if len(act_d) < min_doses_req or not (np.any(act_d >= 1.0) or len(act_d) >= 5):
             continue
 
         bx_i, by_i = int(bx), int(by)
@@ -1022,8 +1005,15 @@ def build_bundle() -> None:
         folder_name = cmeta["folder_name"]
         is_clamped = cmeta["is_clamped_0mM"]
 
-        unclipped_pq = runs_root / folder_name / "3x3_WT_inverse_unclipped_3d_voxels.parquet"
-        vox_pq = unclipped_pq if (is_clamped and unclipped_pq.exists()) else (runs_root / folder_name / "titration_3d_voxels_matched.parquet")
+        unclipped_all_pq = runs_root / folder_name / "titration_3d_voxels_unclipped.parquet"
+        unclipped_3x3_pq = runs_root / folder_name / "3x3_WT_inverse_unclipped_3d_voxels.parquet"
+        matched_pq = runs_root / folder_name / "titration_3d_voxels_matched.parquet"
+        if unclipped_all_pq.exists():
+            vox_pq = unclipped_all_pq
+        elif is_clamped and unclipped_3x3_pq.exists():
+            vox_pq = unclipped_3x3_pq
+        else:
+            vox_pq = matched_pq
         cache_key = str(vox_pq)
         if vox_pq.exists():
             if cache_key not in vox_cache:
@@ -1083,59 +1073,6 @@ def build_bundle() -> None:
             else:
                 p_bins, p_q_px = [], {}
 
-            # For default `ed_vs_load`, overlay canonical Stage 1 `df_bins` Hill fits while keeping empirical traces
-            if proj_key == "ed_vs_load":
-                trace_lookup = {(b["bx"], b["by"]): b["traces"] for b in p_bins}
-                sub_b = df_bins[df_bins["design_id"] == did].sort_values(["by", "bx"])
-                canon_bins = []
-                for _, brow in sub_b.iterrows():
-                    bx_i = int(brow["bx"])
-                    by_i = int(brow["by"])
-                    canon_bins.append({
-                        "bx": bx_i,
-                        "by": by_i,
-                        "x": clean_val(brow["x_dlog10_ED"], 3),
-                        "y": clean_val(brow["y_dlog10_Load"], 3),
-                        "nvox": clean_val(brow.get("med_voxels_per_dose", 5.0), 1),
-                        "F0_mHz": clean_val(brow.get("F0_med"), 2),
-                        "coup_y0": clean_val(brow.get("coup_y0"), 3),
-                        "coup_dy_max": clean_val(brow.get("coup_dy_max"), 3),
-                        "coup_5mM": clean_val(brow.get("coup_5mM_fit"), 3),
-                        "coup_dy": clean_val(brow.get("coup_dy_5mM"), 3),
-                        "coup_ec50": clean_val(brow.get("coup_ec50_mM"), 3),
-                        "coup_nhill": clean_val(brow.get("coup_nhill"), 2),
-                        "coup_r2": clean_val(brow.get("coup_r2"), 3),
-                        "fm_dy_max_pct": clean_val(brow.get("fm_dy_max_pct"), 2),
-                        "fm_5mM_pct": clean_val(brow.get("fm_5mM_fit_pct"), 2),
-                        "fm_ec50": clean_val(brow.get("fm_ec50_mM"), 3),
-                        "fm_nhill": clean_val(brow.get("fm_nhill"), 2),
-                        "fm_r2": clean_val(brow.get("fm_r2"), 3),
-                        "cr_max_fold": clean_val(brow.get("cr_max_fold"), 3),
-                        "cr_5mM_fold": clean_val(brow.get("cr_5mM_fit_fold"), 3),
-                        "cr_5mM_pct": clean_val(brow.get("cr_5mM_pct"), 2),
-                        "cr_ec50": clean_val(brow.get("cr_ec50_mM"), 3),
-                        "cr_nhill": clean_val(brow.get("cr_nhill"), 2),
-                        "cr_r2": clean_val(brow.get("cr_r2"), 3),
-                        "load_max_fold": clean_val(brow.get("load_max_fold"), 3),
-                        "load_5mM_fold": clean_val(brow.get("load_5mM_fit"), 3),
-                        "load_ec50": clean_val(brow.get("load_ec50_mM"), 3),
-                        "load_nhill": clean_val(brow.get("load_nhill"), 2),
-                        "load_r2": clean_val(brow.get("load_r2"), 3),
-                        "am_max_fold": clean_val(brow.get("am_max_fold"), 3),
-                        "am_5mM_fold": clean_val(brow.get("am_5mM_fit"), 3),
-                        "am_ec50": clean_val(brow.get("am_ec50_mM"), 3),
-                        "am_nhill": clean_val(brow.get("am_nhill"), 2),
-                        "am_r2": clean_val(brow.get("am_r2"), 3),
-                        "osc_y0_pct": clean_val(brow.get("osc_y0_pct"), 2),
-                        "osc_dy_pct": clean_val(brow.get("osc_dy_max_pct"), 2),
-                        "osc_5mM_pct": clean_val(brow.get("osc_5mM_fit_pct"), 2),
-                        "osc_ec50": clean_val(brow.get("osc_ec50_mM"), 3),
-                        "osc_nhill": clean_val(brow.get("osc_nhill"), 2),
-                        "osc_r2": clean_val(brow.get("osc_r2"), 3),
-                        "traces": trace_lookup.get((bx_i, by_i)),
-                    })
-                p_bins = canon_bins
-
             p_q_cell = compute_cell_quadrants_for_projection(c_cells, proj_key)
             cmeta["projections"][proj_key] = {
                 "construct_median_xy": med_xy_map.get(proj_key, [0.0, 0.0]),
@@ -1143,9 +1080,13 @@ def build_bundle() -> None:
                 "quadrants_pixel": p_q_px,
                 "quadrants_cell": p_q_cell,
             }
+            if proj_key == "ed_vs_load":
+                cmeta["bins_2d"] = p_bins
+                cmeta["quadrants_pixel"] = p_q_px
+                cmeta["quadrants_cell"] = p_q_cell
 
     bundle = {
-        "version": "1.3.0",
+        "version": "1.4.0",
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "grid_spec": {
             "nx": 10,
