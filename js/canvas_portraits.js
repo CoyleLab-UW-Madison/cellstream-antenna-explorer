@@ -380,32 +380,38 @@
       ctx.fillText(badgeTxt, bx + 5, by + 10.8);
     }
 
-    // Axes ticks & labels
+    // Axes ticks & labels (dynamically adapted to active 2D projection space)
     if (showAxesLabels) {
-      ctx.fillStyle = "#94a3b8";
-      ctx.font = "600 8.8px 'JetBrains Mono', Consolas, monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("-0.3", padL + 0.7 * cellW, padT + plotH + 11);
-      ctx.fillText("0.0", padL + 5.0 * cellW, padT + plotH + 11);
-      ctx.fillText("+0.3", padL + 9.2 * cellW, padT + plotH + 11);
-
-      ctx.fillStyle = "#cbd5e1";
-      ctx.font = "600 9px Inter, Arial, sans-serif";
-      ctx.fillText("Δlog₁₀(MinE/MinD) [Slow → Fast]", padL + plotW / 2, cssH - 3);
-
-      ctx.save();
-      ctx.translate(11, padT + plotH / 2);
-      ctx.rotate(-Math.PI / 2);
-      ctx.textAlign = "center";
-      ctx.fillText("Δlog₁₀(Cargo/MinD)", 0, 0);
-      ctx.restore();
+      const pSpec = options.projectionSpec || window.ACTIVE_PROJECTION_SPEC || {};
+      const xTicks = pSpec.x_ticks || ["-0.3", "0.0", "+0.3"];
+      const yTicks = pSpec.y_ticks || ["+0.3", "0.0", "-0.3"];
+      const xAxisLbl = pSpec.x_canvas_label || "Δlog₁₀(MinE/MinD) [Slow → Fast]";
+      const yAxisLbl = pSpec.y_canvas_label || "Δlog₁₀(Cargo/D_amp)";
 
       ctx.fillStyle = "#94a3b8";
       ctx.font = "600 8.5px 'JetBrains Mono', Consolas, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(xTicks[0], padL + 0.8 * cellW, padT + plotH + 11);
+      ctx.fillText(xTicks[1], padL + 5.0 * cellW, padT + plotH + 11);
+      ctx.fillText(xTicks[2], padL + 9.2 * cellW, padT + plotH + 11);
+
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "600 8.8px Inter, Arial, sans-serif";
+      ctx.fillText(xAxisLbl, padL + plotW / 2, cssH - 3);
+
+      ctx.save();
+      ctx.translate(10, padT + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = "center";
+      ctx.fillText(yAxisLbl, 0, 0);
+      ctx.restore();
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "600 8.2px 'JetBrains Mono', Consolas, monospace";
       ctx.textAlign = "right";
-      ctx.fillText("+0.3", padL - 3, padT + 1.1 * cellH);
-      ctx.fillText("0.0", padL - 3, padT + 5.2 * cellH);
-      ctx.fillText("-0.3", padL - 3, padT + 9.5 * cellH);
+      ctx.fillText(yTicks[0], padL - 3, padT + 1.1 * cellH);
+      ctx.fillText(yTicks[1], padL - 3, padT + 5.2 * cellH);
+      ctx.fillText(yTicks[2], padL - 3, padT + 9.5 * cellH);
     }
 
     // Store geometry metadata on canvas for interactive mouse hover/click
@@ -507,6 +513,39 @@
     ctx.fillStyle = "#f1f5f9";
     ctx.textAlign = "left";
     ctx.fillText(badgeTxt, bx + 5, by + 10.8);
+
+    if (showAxesLabels) {
+      const pSpec = options.projectionSpec || window.ACTIVE_PROJECTION_SPEC || {};
+      const xTicks = pSpec.x_ticks || ["-0.3", "0.0", "+0.3"];
+      const yTicks = pSpec.y_ticks || ["+0.3", "0.0", "-0.3"];
+      const xAxisLbl = pSpec.x_canvas_label || "Δlog₁₀(MinE/MinD) [Slow → Fast]";
+      const yAxisLbl = pSpec.y_canvas_label || "Δlog₁₀(Cargo/D_amp)";
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "600 8.5px 'JetBrains Mono', Consolas, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(xTicks[0], padL + 0.8 * cellW, padT + plotH + 11);
+      ctx.fillText(xTicks[1], padL + 5.0 * cellW, padT + plotH + 11);
+      ctx.fillText(xTicks[2], padL + 9.2 * cellW, padT + plotH + 11);
+
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "600 8.8px Inter, Arial, sans-serif";
+      ctx.fillText(xAxisLbl, padL + plotW / 2, cssH - 3);
+
+      ctx.save();
+      ctx.translate(10, padT + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = "center";
+      ctx.fillText(yAxisLbl, 0, 0);
+      ctx.restore();
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "600 8.2px 'JetBrains Mono', Consolas, monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(yTicks[0], padL - 3, padT + 1.1 * cellH);
+      ctx.fillText(yTicks[1], padL - 3, padT + 5.2 * cellH);
+      ctx.fillText(yTicks[2], padL - 3, padT + 9.5 * cellH);
+    }
   };
 
   /**

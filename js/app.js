@@ -23,6 +23,8 @@
   }
 
   const CONSTRUCTS = DATA.constructs;
+  const PROJECTION_DEFS = DATA.projection_defs || {};
+  const PROJECTION_ORDER = ["ed_vs_load", "damp_vs_cargo", "d_vs_e", "d_vs_cargo"];
 
   const FAMILIES = [
     { id: "WT_upright",   mutation: "WT",    topology: "upright", label: "WT Upright",   badgeClass: "badge-wt-upr",   subtitle: "FHA1(WT) on MinD Carrier | PKAsub on Diffusive GFP Cargo" },
@@ -45,6 +47,9 @@
     valency: "2x2",
     selectedCircuitA: "2x2_WT_inverse",
     selectedCircuitB: "2x2_WT_upright",
+
+    // Active 2D Coordinate Projection ("ed_vs_load" | "damp_vs_cargo" | "d_vs_e" | "d_vs_cargo")
+    projectionKey: "ed_vs_load",
 
     // Single-Circuit sub-view layout ("dashboard_2x2" matches the user's mockup!)
     focus: "dashboard_2x2",         // "dashboard_2x2" | "all_portraits" | "all_quads" | "pair_metrics"
@@ -79,6 +84,60 @@
     sortCol: "c5mM_sat",
     sortAsc: false
   };
+
+  /**
+   * Synchronizes the active 2D coordinate projection (`state.projectionKey`) across all constructs
+   * and updates `window.ACTIVE_PROJECTION_SPEC` + `DATA.grid_spec`.
+   */
+  function syncActiveProjection() {
+    const pSpec = PROJECTION_DEFS[state.projectionKey] || PROJECTION_DEFS.ed_vs_load || {
+      key: "ed_vs_load",
+      short_title: "Cargo/D_amp vs E/D (Stoichiometric Ratio)",
+      subtitle: "X: Δlog₁₀(MinE/MinD) vs Y: Δlog₁₀(Cargo/D_amp,0)",
+      x_label: "Δlog₁₀(MinE / MinD) [Driver Frequency Axis]",
+      y_label: "Δlog₁₀(Cargo / D_amp,0) [Relative Client Load]",
+      x_canvas_label: "Δlog₁₀(MinE / MinD) [Slow ← 0 → Fast]",
+      y_canvas_label: "Δlog₁₀(Cargo / D_amp)",
+      x_short: "Δlog₁₀(E/D)",
+      y_short: "Δlog₁₀(Cargo/D)",
+      x_edges: [-0.32, -0.256, -0.192, -0.128, -0.064, 0, 0.064, 0.128, 0.192, 0.256, 0.32],
+      y_edges: [-0.42, -0.336, -0.252, -0.168, -0.084, 0, 0.084, 0.168, 0.252, 0.336, 0.42],
+      x_ticks: [["-0.32", 0.0], ["0.0", 0.5], ["+0.32", 1.0]],
+      y_ticks: [["-0.4", 0.024], ["0.0", 0.5], ["+0.4", 0.976]],
+      quad_labels: {
+        Q1_Slow_HiLoad: "Q1: Slow (Hi D/E) + Hi Load",
+        Q3_Slow_LoLoad: "Q3: Slow (Hi D/E) + Lo Load",
+        Q2_Fast_HiLoad: "Q2: Fast (Hi E/D) + Hi Load",
+        Q4_Fast_LoLoad: "Q4: Fast (Hi E/D) + Lo Load"
+      },
+      quad_short: {
+        Q1_Slow_HiLoad: "Q1: Slow+HiLoad",
+        Q3_Slow_LoLoad: "Q3: Slow+LoLoad",
+        Q2_Fast_HiLoad: "Q2: Fast+HiLoad",
+        Q4_Fast_LoLoad: "Q4: Fast+LoLoad"
+      }
+    };
+    window.ACTIVE_PROJECTION_SPEC = pSpec;
+    if (DATA.grid_spec) {
+      DATA.grid_spec.x_edges = pSpec.x_edges;
+      DATA.grid_spec.y_edges = pSpec.y_edges;
+      DATA.grid_spec.x_label = pSpec.x_label;
+      DATA.grid_spec.y_label = pSpec.y_label;
+    }
+    for (const c of Object.values(CONSTRUCTS)) {
+      if (c && c.projections) {
+        const projData = c.projections[state.projectionKey] || c.projections.ed_vs_load;
+        if (projData) {
+          c.bins_2d = projData.bins_2d || [];
+          c.quadrants_pixel = projData.quadrants_pixel || {};
+          c.quadrants_cell = projData.quadrants_cell || {};
+        }
+      }
+    }
+    return pSpec;
+  }
+
+  syncActiveProjection();
 
   function getOrderedConstructs(includeTAmut = true) {
     const out = [];
@@ -192,6 +251,12 @@
   // Tooltip manager for 2D Phase Portrait bins
   const tooltipEl = document.getElementById("portrait-tooltip");
 
+  function getBinQuadKey(bx, by) {
+    return bx < 5
+      ? (by >= 5 ? "Q1_Slow_HiLoad" : "Q3_Slow_LoLoad")
+      : (by >= 5 ? "Q2_Fast_HiLoad" : "Q4_Fast_LoLoad");
+  }
+
   function handleBinHover(event, info) {
     if (!tooltipEl) return;
     if (!info) {
@@ -199,19 +264,20 @@
       return;
     }
     const { bx, by, bin, inCore, construct } = info;
-    const xEdges = (DATA.grid_spec && DATA.grid_spec.x_edges) || [-0.32, -0.256, -0.192, -0.128, -0.064, 0, 0.064, 0.128, 0.192, 0.256, 0.32];
-    const yEdges = (DATA.grid_spec && DATA.grid_spec.y_edges) || [-0.42, -0.336, -0.252, -0.168, -0.084, 0, 0.084, 0.168, 0.252, 0.336, 0.42];
+    const projSpec = window.ACTIVE_PROJECTION_SPEC || syncActiveProjection();
+    const xEdges = projSpec.x_edges || [-0.32, -0.256, -0.192, -0.128, -0.064, 0, 0.064, 0.128, 0.192, 0.256, 0.32];
+    const yEdges = projSpec.y_edges || [-0.42, -0.336, -0.252, -0.168, -0.084, 0, 0.084, 0.168, 0.252, 0.336, 0.42];
     const xRanges = [xEdges[bx] ?? 0, xEdges[bx + 1] ?? 0];
     const yRanges = [yEdges[by] ?? 0, yEdges[by + 1] ?? 0];
-    const qLabel = bx < 5
-      ? (by >= 5 ? "Q1: Slow (Hi D/E) + Hi Load" : "Q3: Slow (Hi D/E) + Lo Load")
-      : (by >= 5 ? "Q2: Fast (Hi E/D) + Hi Load" : "Q4: Fast (Hi E/D) + Lo Load");
+    const qKey = getBinQuadKey(bx, by);
+    const qLabel = (projSpec.quad_labels && projSpec.quad_labels[qKey]) || qKey;
 
     let html = `
       <div class="tt-title">${construct.valency} ${construct.mutation} ${construct.topology.toUpperCase()} — Bin (${bx}, ${by}) [Click to Plot Curve]</div>
+      <div class="tt-row"><span>Projection:</span><span class="tt-val" style="color:var(--accent);">${projSpec.short_title}</span></div>
       <div class="tt-row"><span>Quadrant:</span><span class="tt-val">${qLabel}</span></div>
-      <div class="tt-row"><span>Δlog₁₀(E/D):</span><span class="tt-val">[${xRanges[0].toFixed(2)}, ${xRanges[1].toFixed(2)}]</span></div>
-      <div class="tt-row"><span>Δlog₁₀(Cargo/D):</span><span class="tt-val">[${yRanges[0].toFixed(2)}, ${yRanges[1].toFixed(2)}]</span></div>
+      <div class="tt-row"><span>${projSpec.x_short || "X"}:</span><span class="tt-val">[${xRanges[0].toFixed(2)}, ${xRanges[1].toFixed(2)}]</span></div>
+      <div class="tt-row"><span>${projSpec.y_short || "Y"}:</span><span class="tt-val">[${yRanges[0].toFixed(2)}, ${yRanges[1].toFixed(2)}]</span></div>
     `;
 
     if (!bin) {
@@ -247,13 +313,15 @@
     const hudEl = document.getElementById("hud-telemetry");
     if (!hudEl) return;
 
+    const projSpec = window.ACTIVE_PROJECTION_SPEC || syncActiveProjection();
     const c = CONSTRUCTS[state.selectedCircuitA] || CONSTRUCTS["2x2_WT_inverse"];
     const gs = c.global_summary || {};
     const badgeCls = getBadgeClassForConstruct(c);
     const bx = state.selectedBin.bx;
     const by = state.selectedBin.by;
     const binObj = (c.bins_2d || []).find(b => b.bx === bx && b.by === by);
-    const qShort = bx < 5 ? (by >= 5 ? "Q1" : "Q3") : (by >= 5 ? "Q2" : "Q4");
+    const qKey = getBinQuadKey(bx, by);
+    const qShort = (projSpec.quad_short && projSpec.quad_short[qKey]) ? projSpec.quad_short[qKey] : (bx < 5 ? (by >= 5 ? "Q1" : "Q3") : (by >= 5 ? "Q2" : "Q4"));
 
     hudEl.innerHTML = `
       <div class="hud-chip" style="border-color:#3b4c73;">
@@ -262,6 +330,10 @@
           <span class="badge ${badgeCls}" style="margin-right:4px;">${c.valency} ${c.mutation} ${c.topology.toUpperCase()}</span>
           <span style="color:var(--muted);font-size:10.5px;">${c.plasmids}</span>
         </span>
+      </div>
+      <div class="hud-chip">
+        <span class="hud-chip-lbl">2D Projection (Key: P)</span>
+        <span class="hud-chip-val" style="color:var(--accent);font-size:11.5px;">${projSpec.short_title}</span>
       </div>
       <div class="hud-chip">
         <span class="hud-chip-lbl">Coupling C₀ → C₅ₘₘ (ΔC)</span>
@@ -282,10 +354,6 @@
         <span class="hud-chip-lbl">5mM Carrier ΔD_amp</span>
         <span class="hud-chip-val" style="color:#c084fc;">${formatNum(gs.cr_5mM_pct, 1, "%", true)}</span>
       </div>
-      <div class="hud-chip">
-        <span class="hud-chip-lbl">Active Cells (0→5mM)</span>
-        <span class="hud-chip-val">${formatNum(gs.active_cells_0mM_pct, 0, "%")} → <span style="color:#34d399;">${formatNum(gs.active_cells_5mM_pct, 0, "%")}</span></span>
-      </div>
       <div class="hud-chip" style="border-color:var(--accent);">
         <span class="hud-chip-lbl" style="color:var(--accent);">Clicked Bin (${bx}, ${by}) · ${qShort}</span>
         <span class="hud-chip-val" id="hud-bin-readout" style="color:#38bdf8;">
@@ -304,6 +372,7 @@
     const sbArch = document.getElementById("sidebar-architecture");
     if (!sbCtrl || !sbArch) return;
 
+    const projSpec = window.ACTIVE_PROJECTION_SPEC || syncActiveProjection();
     const c = CONSTRUCTS[state.selectedCircuitA] || CONSTRUCTS["2x2_WT_inverse"];
     const allConstructs = getOrderedConstructs(true);
 
@@ -409,6 +478,22 @@
 
       <div class="sb-section-title">
         <span>2. Metric &amp; Display Options</span>
+      </div>
+
+      <div class="sb-group">
+        <div class="sb-label">
+          <span>2D Coordinate Projection</span>
+          <span style="font-family:var(--font-mono);color:var(--accent);font-size:10px;">Key: P</span>
+        </div>
+        <select id="sb-sel-projection" class="sb-select" style="border-color:#3b4c73;">
+          ${PROJECTION_ORDER.map((pk, idx) => {
+            const p = PROJECTION_DEFS[pk] || {};
+            return `<option value="${pk}" ${state.projectionKey === pk ? "selected" : ""}>${idx + 1}. ${p.short_title || pk}</option>`;
+          }).join("")}
+        </select>
+        <div style="font-size:10.2px;color:var(--muted);font-family:var(--font-mono);margin-top:3px;line-height:1.35;">
+          ${projSpec.subtitle || ""}
+        </div>
       </div>
 
       <div class="sb-group">
@@ -559,6 +644,15 @@
       });
     }
 
+    const selProj = document.getElementById("sb-sel-projection");
+    if (selProj) {
+      selProj.addEventListener("change", e => {
+        state.projectionKey = e.target.value;
+        syncActiveProjection();
+        updateUI();
+      });
+    }
+
     const selPmetric = document.getElementById("sb-sel-pmetric");
     if (selPmetric) {
       selPmetric.addEventListener("change", e => {
@@ -641,13 +735,15 @@
    * Builds a Quantitative 4-Quadrant + Clicked-Bin Hill Fit Table (`table.fov-table`).
    */
   function buildQuadrantFitTableHTML(construct, metricKey, dataSource, selectedBin = null) {
+    const projSpec = window.ACTIVE_PROJECTION_SPEC || syncActiveProjection();
+    const qLabels = projSpec.quad_labels || {};
     const qDict = dataSource === "cell" ? (construct.quadrants_cell || {}) : (construct.quadrants_pixel || {});
     const qSpec = window.QUADRANT_METRIC_MAP[metricKey] || window.QUADRANT_METRICS[0];
     const quads = [
-      { key: "Q1_Slow_HiLoad", short: "Q1: Slow (Hi D/E) + Hi Load", dot: "q1" },
-      { key: "Q3_Slow_LoLoad", short: "Q3: Slow (Hi D/E) + Lo Load", dot: "q3" },
-      { key: "Q2_Fast_HiLoad", short: "Q2: Fast (Hi E/D) + Hi Load", dot: "q2" },
-      { key: "Q4_Fast_LoLoad", short: "Q4: Fast (Hi E/D) + Lo Load", dot: "q4" }
+      { key: "Q1_Slow_HiLoad", short: qLabels.Q1_Slow_HiLoad || "Q1: Slow (Hi D/E) + Hi Load", dot: "q1" },
+      { key: "Q3_Slow_LoLoad", short: qLabels.Q3_Slow_LoLoad || "Q3: Slow (Hi D/E) + Lo Load", dot: "q3" },
+      { key: "Q2_Fast_HiLoad", short: qLabels.Q2_Fast_HiLoad || "Q2: Fast (Hi E/D) + Hi Load", dot: "q2" },
+      { key: "Q4_Fast_LoLoad", short: qLabels.Q4_Fast_LoLoad || "Q4: Fast (Hi E/D) + Lo Load", dot: "q4" }
     ];
 
     const dec = qSpec.decimals;
@@ -699,7 +795,7 @@
       <table class="fov-table">
         <thead>
           <tr>
-            <th>Stoichiometry Regime</th>
+            <th>Quadrant Regime (${projSpec.short_title})</th>
             <th>${dataSource === "cell" ? "Cells" : "Voxels"}</th>
             <th>Basal y₀</th>
             <th>5mM y₅ₘₘ</th>
@@ -718,16 +814,16 @@
    * Builds the HTML for the Bottom-Left "Fit Information" Card in the Single-Viewer 2x2 Dashboard!
    */
   function buildFitInformationPanelHTML(construct, bx, by) {
+    const projSpec = window.ACTIVE_PROJECTION_SPEC || syncActiveProjection();
     const binObj = (construct.bins_2d || []).find(b => b.bx === bx && b.by === by);
-    const qLabel = bx < 5
-      ? (by >= 5 ? "Q1: Slow (Hi D/E) + Hi Load" : "Q3: Slow (Hi D/E) + Lo Load")
-      : (by >= 5 ? "Q2: Fast (Hi E/D) + Hi Load" : "Q4: Fast (Hi E/D) + Lo Load");
+    const qKey = getBinQuadKey(bx, by);
+    const qLabel = (projSpec.quad_labels && projSpec.quad_labels[qKey]) || qKey;
 
     let binSummaryHTML = "";
     if (!binObj) {
       binSummaryHTML = `
         <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-family:var(--font-mono);font-size:11.5px;color:#f87171;">
-          <strong>Clicked Bin (${bx}, ${by}) [${qLabel.split(":")[0]}]</strong> is unpopulated or non-oscillating in ${construct.valency} ${construct.mutation} ${construct.topology}. Click any colored bin in the 2D Phase Portrait above to inspect its Hill fits.
+          <strong>Clicked Bin (${bx}, ${by}) [${qLabel.split(":")[0]}]</strong> is unpopulated or non-oscillating in ${construct.valency} ${construct.mutation} ${construct.topology} (${projSpec.short_title}). Click any colored bin in the 2D Phase Portrait above to inspect its Hill fits.
         </div>
       `;
     } else {
@@ -735,7 +831,7 @@
         <div style="background:var(--panel-alt);border:1px solid var(--border-light);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-family:var(--font-mono);font-size:11.2px;line-height:1.55;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;border-bottom:1px solid var(--border);padding-bottom:3px;">
             <strong style="color:#38bdf8;">Clicked Bin (${bx}, ${by}) Multi-Metric Hill Summary</strong>
-            <span style="color:var(--muted);">Δlog₁₀(E/D)=<strong>${formatNum(binObj.x, 2, "", true)}</strong>, Δlog₁₀(Cargo/D)=<strong>${formatNum(binObj.y, 2, "", true)}</strong> · ${qLabel.split(":")[0]}</span>
+            <span style="color:var(--muted);">${projSpec.x_short || "X"}=<strong>${formatNum(binObj.x, 2, "", true)}</strong>, ${projSpec.y_short || "Y"}=<strong>${formatNum(binObj.y, 2, "", true)}</strong> · ${qLabel.split(":")[0]}</span>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">
             <div><span style="color:var(--muted);">Coupling C(c):</span> <strong style="color:#38bdf8;">${formatNum(binObj.coup_y0, 2)} → ${formatNum(binObj.coup_5mM, 2)}</strong> (EC₅₀=${formatNum(binObj.coup_ec50, 2, "mM")}, R²=${formatNum(binObj.coup_r2, 2)})</div>
@@ -835,6 +931,8 @@
    *   - Bottom-Right: Clicked Bin Joint Curve: C(c), ΔF%, ΔD% (Shared 0mM Origin + IQR Bars)
    */
   function renderSingleMode(container) {
+    const projSpec = window.ACTIVE_PROJECTION_SPEC || syncActiveProjection();
+    const qShortMap = projSpec.quad_short || {};
     const c = CONSTRUCTS[state.selectedCircuitA] || CONSTRUCTS["2x2_WT_inverse"];
     const pSpec = window.PORTRAIT_METRIC_MAP[state.portraitMetricKey] || window.PORTRAIT_METRICS[0];
     const qSpec = window.QUADRANT_METRIC_MAP[state.quadMetricKey] || window.QUADRANT_METRICS[0];
@@ -850,7 +948,7 @@
           <!-- TOP-LEFT: 2D Stoichiometry Phase Portrait -->
           <div class="tile-card" style="align-items:center;justify-content:space-between;">
             <div class="tile-card-header">
-              <span>2D Stoichiometry Phase Portrait (Click any bin to plot curve)</span>
+              <span>2D Portrait: ${projSpec.short_title} (Click any bin)</span>
               <div style="display:flex;gap:6px;align-items:center;">
                 <span class="mono-tag">${c.valency} ${c.mutation} ${c.topology.toUpperCase()}</span>
                 <button class="zoom-btn-mini" id="btn-show-all-9-portraits" title="View All 9 Phase Portraits (3×3 Grid)">All 9 ⊞</button>
@@ -875,10 +973,10 @@
             </div>
             <canvas id="dash-quad-canvas" data-w="${szDash.w}" data-h="${szDash.h}" width="${szDash.w}" height="${szDash.h}"></canvas>
             <div class="quad-legend-row" style="margin-top:6px;width:100%;justify-content:center;">
-              <span><span class="quad-dot q1"></span>Q1</span>
-              <span><span class="quad-dot q3"></span>Q3</span>
-              <span><span class="quad-dot q2"></span>Q2</span>
-              <span><span class="quad-dot q4"></span>Q4</span>
+              <span><span class="quad-dot q1"></span>${qShortMap.Q1_Slow_HiLoad || "Q1"}</span>
+              <span><span class="quad-dot q3"></span>${qShortMap.Q3_Slow_LoLoad || "Q3"}</span>
+              <span><span class="quad-dot q2"></span>${qShortMap.Q2_Fast_HiLoad || "Q2"}</span>
+              <span><span class="quad-dot q4"></span>${qShortMap.Q4_Fast_LoLoad || "Q4"}</span>
               <span><span class="quad-dot bin"></span><strong style="color:#38bdf8;" id="dash-quad-legend-bin">Clicked Bin (${bx}, ${by})</strong></span>
             </div>
           </div>
@@ -939,7 +1037,7 @@
         <div class="fov-card">
           <div class="fov-card-header">
             <div>
-              <strong>All 9 Intrinsic 2D Stoichiometry Phase Portraits (${c.valency} ${c.mutation} ${c.topology.toUpperCase()})</strong>
+              <strong>All 9 Phase Portraits (${c.valency} ${c.mutation} ${c.topology.toUpperCase()}) — ${projSpec.short_title}</strong>
               <span style="color:var(--muted);margin-left:10px;font-size:12px;">
                 Click any <strong>(bx, by) bin</strong> or click <strong>2×2 Dashboard ⤢</strong> to inspect its dose-response curves.
               </span>
@@ -968,7 +1066,7 @@
         <div class="fov-card">
           <div class="fov-card-header">
             <div>
-              <strong>All 6 4-Quadrant + Clicked Bin (${bx}, ${by}) Dose-Response Curves — ${state.dataSource.toUpperCase()} MODE</strong>
+              <strong>All 6 4-Quadrant + Clicked Bin (${bx}, ${by}) Dose-Response Curves — ${projSpec.short_title} (${state.dataSource.toUpperCase()} MODE)</strong>
             </div>
             <button class="pill-btn active" id="btn-back-2x2">← Back to 2×2 Inspector Dashboard</button>
           </div>
@@ -992,7 +1090,7 @@
         <div class="fov-card">
           <div class="fov-card-header">
             <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
-              <strong>Side-by-Side Metric Comparison (${c.valency} ${c.mutation} ${c.topology.toUpperCase()})</strong>
+              <strong>Side-by-Side Metric Comparison (${c.valency} ${c.mutation} ${c.topology.toUpperCase()} · ${projSpec.short_title})</strong>
               <label style="font-size:12px;color:var(--muted);">Left:
                 <select id="sel-pair-mleft" class="dark-select">
                   ${window.PORTRAIT_METRICS.map(m => `<option value="${m.key}" ${m.key === state.pairMetricLeft ? "selected" : ""}>${m.shortLabel}</option>`).join("")}
@@ -1110,6 +1208,8 @@
    * MODE 2: 3x3 Family Explorer
    */
   function renderFamily3x3Mode(container) {
+    const projSpec = window.ACTIVE_PROJECTION_SPEC || syncActiveProjection();
+    const qShortMap = projSpec.quad_short || {};
     const fam = FAMILIES.find(f => f.id === state.familyId && f.id !== "TAmut_ctrl") || FAMILIES[0];
     const pSpec = window.PORTRAIT_METRIC_MAP[state.portraitMetricKey] || window.PORTRAIT_METRICS[0];
     const qSpec = window.QUADRANT_METRIC_MAP[state.quadMetricKey] || window.QUADRANT_METRICS[0];
@@ -1146,7 +1246,7 @@
           <div>
             <span class="badge ${fam.badgeClass}">${fam.label.toUpperCase()} FAMILY (3×3 MATRIX)</span>
             <strong style="margin-left:8px;font-size:13.5px;">
-              ${state.viewType === "portraits" ? pSpec.title : `${qSpec.shortLabel} (${state.dataSource.toUpperCase()} Mode)`}
+              ${state.viewType === "portraits" ? `${pSpec.title} [${projSpec.short_title}]` : `${qSpec.shortLabel} [${projSpec.short_title} · ${state.dataSource.toUpperCase()}]`}
             </strong>
             <span style="color:var(--muted);margin-left:8px;font-size:11.5px;">${fam.subtitle}</span>
           </div>
@@ -1154,10 +1254,10 @@
             ${state.viewType === "portraits"
               ? `<canvas id="fam3x3-cbar" data-w="250" data-h="26" width="250" height="26"></canvas>`
               : `<div class="quad-legend-row">
-                   <span><span class="quad-dot q1"></span>Q1: Slow+HiLoad</span>
-                   <span><span class="quad-dot q3"></span>Q3: Slow+LoLoad</span>
-                   <span><span class="quad-dot q2"></span>Q2: Fast+HiLoad</span>
-                   <span><span class="quad-dot q4"></span>Q4: Fast+LoLoad</span>
+                   <span><span class="quad-dot q1"></span>${qShortMap.Q1_Slow_HiLoad || "Q1"}</span>
+                   <span><span class="quad-dot q3"></span>${qShortMap.Q3_Slow_LoLoad || "Q3"}</span>
+                   <span><span class="quad-dot q2"></span>${qShortMap.Q2_Fast_HiLoad || "Q2"}</span>
+                   <span><span class="quad-dot q4"></span>${qShortMap.Q4_Fast_LoLoad || "Q4"}</span>
                  </div>`
             }
           </div>
@@ -1221,6 +1321,8 @@
    * MODE 3: Full 4 x (3x3) Library Overview
    */
   function renderLibrary6x6Mode(container) {
+    const projSpec = window.ACTIVE_PROJECTION_SPEC || syncActiveProjection();
+    const qShortMap = projSpec.quad_short || {};
     const pSpec = window.PORTRAIT_METRIC_MAP[state.portraitMetricKey] || window.PORTRAIT_METRICS[0];
     const qSpec = window.QUADRANT_METRIC_MAP[state.quadMetricKey] || window.QUADRANT_METRICS[0];
     const sz6 = getAdaptiveTileSize("library6x6");
@@ -1259,20 +1361,20 @@
           <div>
             <strong style="font-size:13.5px;color:var(--accent);">
               Full 36-Construct Library (4 × 3×3 Layout) —
-              ${state.viewType === "portraits" ? pSpec.title : `${qSpec.shortLabel} (${state.dataSource.toUpperCase()} Mode)`}
+              ${state.viewType === "portraits" ? `${pSpec.title} [${projSpec.short_title}]` : `${qSpec.shortLabel} [${projSpec.short_title} · ${state.dataSource.toUpperCase()}]`}
             </strong>
             <span style="font-size:11.5px;color:var(--muted);margin-left:8px;">
-              Click any construct tile or stoichiometry bin to open its 2×2 Inspector.
+              Click any construct tile or coordinate bin to open its 2×2 Inspector.
             </span>
           </div>
           <div>
             ${state.viewType === "portraits"
               ? `<canvas id="lib6x6-cbar" data-w="250" data-h="26" width="250" height="26"></canvas>`
               : `<div class="quad-legend-row">
-                   <span><span class="quad-dot q1"></span>Q1: Slow+HiLoad</span>
-                   <span><span class="quad-dot q3"></span>Q3: Slow+LoLoad</span>
-                   <span><span class="quad-dot q2"></span>Q2: Fast+HiLoad</span>
-                   <span><span class="quad-dot q4"></span>Q4: Fast+LoLoad</span>
+                   <span><span class="quad-dot q1"></span>${qShortMap.Q1_Slow_HiLoad || "Q1"}</span>
+                   <span><span class="quad-dot q3"></span>${qShortMap.Q3_Slow_LoLoad || "Q3"}</span>
+                   <span><span class="quad-dot q2"></span>${qShortMap.Q2_Fast_HiLoad || "Q2"}</span>
+                   <span><span class="quad-dot q4"></span>${qShortMap.Q4_Fast_LoLoad || "Q4"}</span>
                  </div>`
             }
           </div>
@@ -1485,6 +1587,8 @@
    * MODE 5: Target Response Finder ("Inverse Design")
    */
   function renderTargetMode(container) {
+    const projSpec = window.ACTIVE_PROJECTION_SPEC || syncActiveProjection();
+    const qShortMap = projSpec.quad_short || {};
     const pSpec = window.PORTRAIT_METRIC_MAP[state.portraitMetricKey] || window.PORTRAIT_METRICS[0];
     const refConstruct = CONSTRUCTS[state.selectedCircuitA] || CONSTRUCTS["2x2_WT_upright"];
     const ranked = window.rankCircuitsByTarget(CONSTRUCTS, state.targetRegionSpec, state.targetCriteria, false);
@@ -1510,13 +1614,13 @@
           </div>
 
           <div class="fov-card-header">
-            <strong style="color:var(--accent);">2. Click Target Region on Stoichiometry Pad</strong>
+            <strong style="color:var(--accent);">2. Click Target Region (${projSpec.short_title})</strong>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
-            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q1_Slow_HiLoad" ? "active" : ""}" data-reg-q="Q1_Slow_HiLoad">Q1 (Slow+Hi)</button>
-            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q3_Slow_LoLoad" ? "active" : ""}" data-reg-q="Q3_Slow_LoLoad">Q3 (Slow+Lo)</button>
-            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q2_Fast_HiLoad" ? "active" : ""}" data-reg-q="Q2_Fast_HiLoad">Q2 (Fast+Hi)</button>
-            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q4_Fast_LoLoad" ? "active" : ""}" data-reg-q="Q4_Fast_LoLoad">Q4 (Fast+Lo)</button>
+            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q1_Slow_HiLoad" ? "active" : ""}" data-reg-q="Q1_Slow_HiLoad">${qShortMap.Q1_Slow_HiLoad || "Q1"}</button>
+            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q3_Slow_LoLoad" ? "active" : ""}" data-reg-q="Q3_Slow_LoLoad">${qShortMap.Q3_Slow_LoLoad || "Q3"}</button>
+            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q2_Fast_HiLoad" ? "active" : ""}" data-reg-q="Q2_Fast_HiLoad">${qShortMap.Q2_Fast_HiLoad || "Q2"}</button>
+            <button class="pill-btn ${state.targetRegionSpec.mode === "quadrant" && state.targetRegionSpec.quadrant === "Q4_Fast_LoLoad" ? "active" : ""}" data-reg-q="Q4_Fast_LoLoad">${qShortMap.Q4_Fast_LoLoad || "Q4"}</button>
             <button class="pill-btn ${state.targetRegionSpec.mode === "all" ? "active" : ""}" data-reg-all="1">All Bins</button>
           </div>
           <div style="display:flex;justify-content:center;margin-bottom:12px;">
@@ -1551,7 +1655,7 @@
             <div>
               <strong style="font-size:14px;color:var(--accent);">Closest Matching Antenna-Circuit Designs (Top 9 of 36)</strong>
               <span style="font-size:11.5px;color:var(--muted);margin-left:8px;">
-                Evaluated in <strong>${state.targetRegionSpec.mode === "quadrant" ? state.targetRegionSpec.quadrant.replace(/_/g, " ") : (state.targetRegionSpec.mode === "bin" ? `Stoichiometry Bin (${state.targetRegionSpec.bx}, ${state.targetRegionSpec.by}) ± 1` : "All Populated Bins")}</strong>
+                Evaluated in <strong>${state.targetRegionSpec.mode === "quadrant" ? ((projSpec.quad_labels && projSpec.quad_labels[state.targetRegionSpec.quadrant]) || state.targetRegionSpec.quadrant) : (state.targetRegionSpec.mode === "bin" ? `Coordinate Bin (${state.targetRegionSpec.bx}, ${state.targetRegionSpec.by}) ± 1` : "All Populated Bins")}</strong>
               </span>
             </div>
           </div>
@@ -1793,6 +1897,7 @@
    */
   function updateUI() {
     if (tooltipEl) tooltipEl.style.display = "none";
+    syncActiveProjection();
     renderTopHud();
     renderSidebar();
 
@@ -1852,6 +1957,11 @@
         updateUI();
       } else if (e.key.toLowerCase() === "m") {
         state.dataSource = state.dataSource === "pixel" ? "cell" : "pixel";
+        updateUI();
+      } else if (e.key.toLowerCase() === "p") {
+        const curIdx = PROJECTION_ORDER.indexOf(state.projectionKey);
+        state.projectionKey = PROJECTION_ORDER[(curIdx + 1) % PROJECTION_ORDER.length];
+        syncActiveProjection();
         updateUI();
       }
     });
