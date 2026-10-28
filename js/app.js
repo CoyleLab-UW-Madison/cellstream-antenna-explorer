@@ -58,6 +58,7 @@
 
     // Single-Circuit sub-view layout ("dashboard_2x2" matches the user's mockup!)
     focus: "dashboard_2x2",         // "dashboard_2x2" | "all_portraits" | "all_quads" | "pair_metrics"
+    zSubMode: "split",              // "split" | "cross_section" | "tertiles"
     pairMetricLeft: "coup_5mM",
     pairMetricRight: "fm_5mM_pct",
     scalePct: 100,                  // User scale multiplier (65% to 140%) on top of viewport-adaptive sizing
@@ -977,13 +978,36 @@
       });
     }
 
-    // 4. Update Bottom-Right Clicked Bin Joint Co-Dosing Curve (`#dock-bin-multi-canvas`)
+    // 4. Update 3rd-Variable Core Sample Inspector Canvases (`#z-slice-heatmap-canvas` & `#z-slice-curves-canvas`)
+    const zSpec = window.getZSpecForProjection ? window.getZSpecForProjection(state.projectionKey) : { z_symbol: "3rd Var", z_short: "log₁₀(AU)" };
+    const zHeatTitle = document.getElementById("dash-z-heat-title");
+    if (zHeatTitle) {
+      zHeatTitle.textContent = `Clicked Bin (${bx}, ${by}) — 3rd-Var (${zSpec.z_symbol}) × Dose Portrait`;
+    }
+    const zHeatTag = document.getElementById("dash-z-heat-tag");
+    if (zHeatTag) {
+      zHeatTag.textContent = `${zSpec.z_short} · ${qSpec.shortLabel}`;
+    }
+    const zCurveTitle = document.getElementById("dash-z-curve-title");
+    if (zCurveTitle) {
+      zCurveTitle.textContent = `Clicked Bin (${bx}, ${by}) — ${zSpec.z_symbol} [log₁₀ AU] Effect on ${qSpec.shortLabel}`;
+    }
+    const zHeatCvs = document.getElementById("z-slice-heatmap-canvas");
+    if (zHeatCvs && window.renderZSliceHeatmapCanvas) {
+      window.renderZSliceHeatmapCanvas(zHeatCvs, c, state.projectionKey, bx, by, state.quadMetricKey);
+    }
+    const zCurveCvs = document.getElementById("z-slice-curves-canvas");
+    if (zCurveCvs && window.renderZSliceCrossSectionAndCurvesCanvas) {
+      window.renderZSliceCrossSectionAndCurvesCanvas(zCurveCvs, c, state.projectionKey, bx, by, state.quadMetricKey, state.zSubMode);
+    }
+
+    // 5. Update Bottom-Right Clicked Bin Joint Co-Dosing Curve (`#dock-bin-multi-canvas`)
     const dockMultiCvs = document.getElementById("dock-bin-multi-canvas");
     if (dockMultiCvs) {
       window.renderSingleBinMultiCurveCanvas(dockMultiCvs, c, bx, by);
     }
 
-    // 5. Redraw all currently mounted 2D phase portrait canvases in-place so the cyan highlight box moves to (bx, by)
+    // 6. Redraw all currently mounted 2D phase portrait canvases in-place so the cyan highlight box moves to (bx, by)
     document.querySelectorAll("canvas.live-portrait-canvas").forEach(cvs => {
       const meta = cvs._portraitMeta;
       if (meta && meta.construct && meta.metricSpec) {
@@ -1056,6 +1080,34 @@
             </div>
           </div>
 
+          <!-- MIDDLE-LEFT: 3rd-Variable Core Sample Inspector — [Dose × 3rd Variable (log₁₀ AU)] Portrait -->
+          <div class="tile-card" style="align-items:center;justify-content:space-between;border-color:rgba(167,139,250,0.45);">
+            <div class="tile-card-header">
+              <span id="dash-z-heat-title" style="color:#c4b5fd;">Clicked Bin (${bx}, ${by}) — 3rd-Var × Dose Portrait</span>
+              <span class="mono-tag" id="dash-z-heat-tag" style="background:rgba(167,139,250,0.18);color:#c4b5fd;">3rd Var · ${qSpec.shortLabel}</span>
+            </div>
+            <canvas id="z-slice-heatmap-canvas" data-w="${szDash.w}" data-h="${Math.round(szDash.h * 0.90)}" width="${szDash.w}" height="${Math.round(szDash.h * 0.90)}"></canvas>
+            <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:4px;text-align:center;">
+              Drills along the hidden 3rd expression axis inside clicked bin (${bx}, ${by}) across all 6 Bt₂cAMP doses
+            </div>
+          </div>
+
+          <!-- MIDDLE-RIGHT: 3rd-Variable Effect on Response — Cross-Section & Stratified Tertile Curves -->
+          <div class="tile-card" style="align-items:center;justify-content:space-between;border-color:rgba(56,189,248,0.45);">
+            <div class="tile-card-header">
+              <span id="dash-z-curve-title" style="color:#38bdf8;">Clicked Bin (${bx}, ${by}) — 3rd-Variable Effect on ${qSpec.shortLabel}</span>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <button class="zoom-btn-mini ${state.zSubMode === 'split' ? 'active' : ''}" data-z-submode="split" style="${state.zSubMode === 'split' ? 'background:#38bdf8;color:#0f172a;font-weight:700;' : ''}">Dual View</button>
+                <button class="zoom-btn-mini ${state.zSubMode === 'cross_section' ? 'active' : ''}" data-z-submode="cross_section" style="${state.zSubMode === 'cross_section' ? 'background:#38bdf8;color:#0f172a;font-weight:700;' : ''}">0 vs 5mM Profile</button>
+                <button class="zoom-btn-mini ${state.zSubMode === 'tertiles' ? 'active' : ''}" data-z-submode="tertiles" style="${state.zSubMode === 'tertiles' ? 'background:#38bdf8;color:#0f172a;font-weight:700;' : ''}">Low/Mid/High Curves</button>
+              </div>
+            </div>
+            <canvas id="z-slice-curves-canvas" data-w="${szDash.w}" data-h="${Math.round(szDash.h * 0.90)}" width="${szDash.w}" height="${Math.round(szDash.h * 0.90)}"></canvas>
+            <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:4px;text-align:center;">
+              Left: Basal (0mM) vs Saturated (5mM) profile + linear slope (/dex) | Right: Stratified Low / Mid / High 3rd-var dose-response
+            </div>
+          </div>
+
           <!-- BOTTOM-LEFT: Fit Information (Clicked Bin Multi-Metric Summary + 4-Quad Fit Table) -->
           <div class="tile-card" style="align-items:stretch;justify-content:flex-start;">
             <div class="tile-card-header">
@@ -1100,6 +1152,20 @@
       if (btnAll9) btnAll9.addEventListener("click", () => { state.focus = "all_portraits"; updateUI(); });
       const btnAll6 = document.getElementById("btn-show-all-6-quads");
       if (btnAll6) btnAll6.addEventListener("click", () => { state.focus = "all_quads"; updateUI(); });
+
+      container.querySelectorAll("[data-z-submode]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.zSubMode = btn.dataset.zSubmode;
+          container.querySelectorAll("[data-z-submode]").forEach(b => {
+            const isAct = b.dataset.zSubmode === state.zSubMode;
+            b.classList.toggle("active", isAct);
+            b.style.background = isAct ? "#38bdf8" : "";
+            b.style.color = isAct ? "#0f172a" : "";
+            b.style.fontWeight = isAct ? "700" : "";
+          });
+          updateClickedBinLive(null);
+        });
+      });
 
       updateClickedBinLive(null);
       return;
@@ -1637,11 +1703,23 @@
 
     if (pA) {
       window.renderPhasePortraitCanvas(pA, cA, pSpec, { confidenceMode: state.confidenceMode, showAxesLabels: true });
-      window.attachPortraitInteractivity(pA, handleBinHover, null);
+      window.attachPortraitInteractivity(pA, handleBinHover, clicked => {
+        syncFamilyValencyFromCircuit(cA.id);
+        state.selectedBin = { bx: clicked.bx, by: clicked.by, quadrant: clicked.quadrant };
+        state.mode = "single";
+        state.focus = "dashboard_2x2";
+        updateUI();
+      });
     }
     if (pB) {
       window.renderPhasePortraitCanvas(pB, cB, pSpec, { confidenceMode: state.confidenceMode, showAxesLabels: true });
-      window.attachPortraitInteractivity(pB, handleBinHover, null);
+      window.attachPortraitInteractivity(pB, handleBinHover, clicked => {
+        syncFamilyValencyFromCircuit(cB.id);
+        state.selectedBin = { bx: clicked.bx, by: clicked.by, quadrant: clicked.quadrant };
+        state.mode = "single";
+        state.focus = "dashboard_2x2";
+        updateUI();
+      });
     }
     if (pD) window.renderDifferencePortraitCanvas(pD, cA, cB, pSpec, { showAxesLabels: true });
     if (cbA) window.renderColorbarCanvas(cbA, pSpec);
