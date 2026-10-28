@@ -267,21 +267,21 @@
       if (s.bz > bzMaxWhole) bzMaxWhole = s.bz;
     });
 
-    // Top header inside canvas
+    // Top header inside canvas (compact so left & right never collide on mobile viewports)
     ctx.fillStyle = "#e2e8f0";
-    ctx.font = "600 10.5px 'Inter', sans-serif";
+    ctx.font = "600 9.8px 'Inter', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
     const medZTxt = (metaZ && metaZ.med_z !== null && metaZ.med_z !== undefined && !zSpec.is_global_abs)
-      ? ` (0mM Med = ${metaZ.med_z.toFixed(2)} AU)`
+      ? ` (Med ${metaZ.med_z.toFixed(2)})`
       : "";
-    ctx.fillText(`Full 10-Bin ${zSpec.z_symbol} Axis${medZTxt} — Core Bin (${bx}, ${by}) vs Whole Portrait`, padL, 15);
+    ctx.fillText(`10-Bin ${zSpec.z_symbol}${medZTxt} · Bin(${bx},${by})`, padL, 15);
 
     const activeCoreCount = binZ && binZ.s ? binZ.s.length : 0;
     ctx.fillStyle = "#38bdf8";
-    ctx.font = "600 9.8px 'JetBrains Mono', monospace";
+    ctx.font = "600 9.2px 'JetBrains Mono', monospace";
     ctx.textAlign = "right";
-    ctx.fillText(`Core: ${activeCoreCount}/${nz} bins (Whole: ${wholeSlices.length}/${nz})`, W - 8, 15);
+    ctx.fillText(`Core:${activeCoreCount}/${nz} (Whole:${wholeSlices.length}/${nz})`, W - 6, 15);
 
     // Base unpopulated 10-bin background (`#1e293b`, matching `renderPhasePortraitCanvas`)
     ctx.fillStyle = "#1e293b";
@@ -495,22 +495,24 @@
     ctx.fillText(zSpec.z_short, 0, 0);
     ctx.restore();
 
-    // X-axis dose labels
+    // X-axis dose labels (automatically skip intermediate labels when nd >= 9 and cellW < 28 so labels never collide)
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "500 9px 'JetBrains Mono', monospace";
+    ctx.font = "500 8.8px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
+    const stepD = (nd >= 8 && cellW < 28) ? 2 : 1;
     for (let di = 0; di < nd; di++) {
+      if (stepD > 1 && di % stepD !== 0 && di !== nd - 1) continue;
       const colX = padL + (di + 0.5) * cellW;
       const dVal = doses[di];
       const dTxt = dVal === 0 ? "0" : (dVal < 1 && dVal !== 0.5 && dVal !== 0.2 && dVal !== 0.1 ? dVal.toFixed(2) : String(dVal));
       ctx.fillText(dTxt, colX, padT + plotH + 4);
     }
-    ctx.fillText("5mM", refX + refW / 2, padT + plotH + 4);
+    ctx.fillText("Whole", refX + refW / 2, padT + plotH + 4);
 
     ctx.fillStyle = "#cbd5e1";
-    ctx.font = "600 9.5px 'Inter', sans-serif";
-    ctx.fillText("Bt₂cAMP Dose (mM)  [Cyan Box = Core Slice | Ghost/Right = Whole Portrait]", padL + (plotW + refW) / 2, padT + plotH + 18);
+    ctx.font = "600 9.2px 'Inter', sans-serif";
+    ctx.fillText("Bt₂cAMP Dose (mM)  [Cyan = Core | Ghost/Right = Whole]", padL + (plotW + refW) / 2, padT + plotH + 18);
 
     // Mini Horizontal Colorbar at Bottom
     const cbY = H - 17;
@@ -607,10 +609,10 @@
 
     // Title
     ctx.fillStyle = "#e2e8f0";
-    ctx.font = "600 10.4px 'Inter', sans-serif";
+    ctx.font = "600 9.6px 'Inter', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillText(`A. ${mCfg.short} vs Full 10-Bin ${zSpec.z_symbol}`, x0 + padL - 6, y0 + 15);
+    ctx.fillText(`A. ${mCfg.short} vs ${zSpec.z_symbol}`, x0 + padL - 10, y0 + 15);
 
     // Plot box background (`#1e293b` unpopulated slate, with highlighted vertical band for Core Slice!)
     ctx.fillStyle = "#0b111d";
@@ -783,17 +785,17 @@
       });
       const slope = den > 1e-4 ? num / den : 0.0;
       ctx.fillStyle = "#38bdf8";
-      ctx.font = "600 8.8px 'JetBrains Mono', monospace";
+      ctx.font = "600 8.2px 'JetBrains Mono', monospace";
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(`Slope:${slope >= 0 ? "+" : ""}${slope.toFixed(2)}${mCfg.unit}/dex`, x0 + padL - 4, y0 + 28);
+      ctx.fillText(`m=${slope >= 0 ? "+" : ""}${slope.toFixed(2)}${mCfg.unit}/dex`, x0 + padL - 10, y0 + 28);
     }
 
     // Legend inside top-right of sub-plot
-    ctx.font = "500 8.5px 'JetBrains Mono', monospace";
+    ctx.font = "500 8.0px 'JetBrains Mono', monospace";
     ctx.textAlign = "right";
     ctx.fillStyle = "#38bdf8";
-    ctx.fillText("●5mM ○0mM ··Whole", x0 + padL + plotW, y0 + 28);
+    ctx.fillText("●5mM ○0mM ·Whole", x0 + padL + plotW, y0 + 28);
 
     ctx.strokeStyle = "#475569";
     ctx.lineWidth = 1.1;
@@ -848,10 +850,10 @@
 
     // Title
     ctx.fillStyle = "#e2e8f0";
-    ctx.font = "600 10.4px 'Inter', sans-serif";
+    ctx.font = "600 9.6px 'Inter', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillText(`B. Stratified ${zSpec.z_symbol} Tertile Curves`, x0 + padL - 6, y0 + 15);
+    ctx.fillText(`B. ${zSpec.z_symbol} Tertile Curves`, x0 + padL - 10, y0 + 15);
 
     // Plot area background & grid
     ctx.fillStyle = "#0b111d";
@@ -962,10 +964,11 @@
 
     // X-axis dose ticks
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "500 8.8px 'JetBrains Mono', monospace";
+    ctx.font = "500 8.5px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    [0, 0.1, 0.25, 0.5, 1, 2, 5].forEach(dVal => {
+    const tickDoses = plotW < 185 ? [0, 0.1, 0.5, 2, 5] : [0, 0.1, 0.25, 0.5, 1, 2, 5];
+    tickDoses.forEach(dVal => {
       const tx = doseToLogX(dVal, x0 + padL, plotW);
       ctx.fillText(String(dVal), tx, y0 + padT + plotH + 5);
     });
