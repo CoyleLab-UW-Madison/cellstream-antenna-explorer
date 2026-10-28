@@ -145,6 +145,37 @@
         }
       }
     }
+
+    // Ensure state.selectedBin points to a populated bin in the active construct (especially in Global Shared mode!)
+    const activeC = CONSTRUCTS[state.selectedCircuitA];
+    if (activeC && Array.isArray(activeC.bins_2d) && activeC.bins_2d.length > 0 && state.selectedBin) {
+      const hasCur = activeC.bins_2d.some(b => b.bx === state.selectedBin.bx && b.by === state.selectedBin.by);
+      if (!hasCur) {
+        const medXY = Array.isArray(activeC.construct_median_xy) ? activeC.construct_median_xy : [0.0, 0.0];
+        let bestBin = activeC.bins_2d[0];
+        let bestScore = Infinity;
+        for (const b of activeC.bins_2d) {
+          const dx = (b.x ?? 0) - medXY[0];
+          const dy = (b.y ?? 0) - medXY[1];
+          const voxBonus = (b.nvox && b.nvox >= 3.0) ? 0.0 : 0.25;
+          const score = Math.hypot(dx, dy) + voxBonus;
+          if (score < bestScore) {
+            bestScore = score;
+            bestBin = b;
+          }
+        }
+        if (bestBin) {
+          state.selectedBin = {
+            bx: bestBin.bx,
+            by: bestBin.by,
+            quadrant: bestBin.bx < 5
+              ? (bestBin.by >= 5 ? "Q1_Slow_HiLoad" : "Q3_Slow_LoLoad")
+              : (bestBin.by >= 5 ? "Q2_Fast_HiLoad" : "Q4_Fast_LoLoad")
+          };
+        }
+      }
+    }
+
     return pSpec;
   }
 

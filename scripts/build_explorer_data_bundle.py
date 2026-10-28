@@ -165,23 +165,23 @@ PROJECTION_DEFS = {
         "is_global_abs": True,
         "short_title": "Cargo/D_amp vs E/D [Global log₁₀ AU]",
         "shortLabel": "1. Stoichiometry Ratios [Global Shared Grid]",
-        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(E/D) [Med 1.36] vs log₁₀(Cargo/D_amp) [Med -0.62]",
+        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(E/D) [Mid 1.44] vs log₁₀(Cargo/D_amp) [Mid -0.25]",
         "name": "Global Stoichiometric Ratio Space — Absolute log₁₀(Cargo/D_amp,0) vs log₁₀(MinE/MinD)",
-        "x_edges": [round(float(x), 3) for x in np.linspace(1.36 - 0.44, 1.36 + 0.44, 11)],
-        "y_edges": [round(float(y), 3) for y in np.linspace(-0.62 - 0.72, -0.62 + 0.72, 11)],
-        "x_label": "Absolute Stoichiometry log₁₀(MinE_AU / MinD_AU) [Global Median = 1.36]",
-        "y_label": "Absolute Relative Load log₁₀(Cargo_AU / D_amp,0_AU) [Global Median = -0.62]",
-        "x_canvas_label": "log₁₀(MinE/MinD AU) [Med 1.36]",
+        "x_edges": [round(float(x), 3) for x in np.linspace(0.80, 2.08, 11)],
+        "y_edges": [round(float(y), 3) for y in np.linspace(-1.45, 0.95, 11)],
+        "x_label": "Absolute Stoichiometry log₁₀(MinE_AU / MinD_AU) [Global Mid = 1.44]",
+        "y_label": "Absolute Relative Load log₁₀(Cargo_AU / D_amp,0_AU) [Global Mid = -0.25]",
+        "x_canvas_label": "log₁₀(MinE/MinD AU) [Mid 1.44]",
         "y_canvas_label": "log₁₀(Cargo/D_amp AU)",
         "x_short": "log₁₀(E/D)",
         "y_short": "log₁₀(Cargo/D)",
-        "x_ticks": ["0.92", "1.36", "1.80"],
-        "y_ticks": ["+0.10", "-0.62", "-1.34"],
+        "x_ticks": ["0.80", "1.44", "2.08"],
+        "y_ticks": ["+0.95", "-0.25", "-1.45"],
         "quad_labels": {
-            "Q1_Slow_HiLoad": "Q1: Global Slow (E/D<1.36) + Hi Load",
-            "Q2_Fast_HiLoad": "Q2: Global Fast (E/D≥1.36) + Hi Load",
-            "Q3_Slow_LoLoad": "Q3: Global Slow (E/D<1.36) + Lo Load",
-            "Q4_Fast_LoLoad": "Q4: Global Fast (E/D≥1.36) + Lo Load",
+            "Q1_Slow_HiLoad": "Q1: Global Slow (E/D<1.44) + Hi Load",
+            "Q2_Fast_HiLoad": "Q2: Global Fast (E/D≥1.44) + Hi Load",
+            "Q3_Slow_LoLoad": "Q3: Global Slow (E/D<1.44) + Lo Load",
+            "Q4_Fast_LoLoad": "Q4: Global Fast (E/D≥1.44) + Lo Load",
         },
         "quad_short": {
             "Q1_Slow_HiLoad": "Q1: GlobSlow+HiLoad",
@@ -195,23 +195,23 @@ PROJECTION_DEFS = {
         "is_global_abs": True,
         "short_title": "Cargo vs D_amp [Global log₁₀ AU]",
         "shortLabel": "2. Carrier Power vs Client [Global Shared Grid]",
-        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(D_amp,0 AU) [Med 4.18] vs log₁₀(Cargo AU) [Med 3.60]",
+        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(D_amp,0 AU) [Mid 3.71] vs log₁₀(Cargo AU) [Mid 3.54]",
         "name": "Global Carrier Wave Power vs Client Abundance — Absolute log₁₀(Cargo AU) vs log₁₀(D_amp,0 AU)",
-        "x_edges": [round(float(x), 3) for x in np.linspace(4.18 - 0.48, 4.18 + 0.48, 11)],
-        "y_edges": [round(float(y), 3) for y in np.linspace(3.60 - 0.62, 3.60 + 0.62, 11)],
-        "x_label": "Absolute Carrier Wave Amplitude log₁₀(D_amp,0mM [AU]) [Global Median = 4.18 (~15k AU)]",
-        "y_label": "Absolute Client Cargo Expression log₁₀(Cargo [AU]) [Global Median = 3.60 (~4k AU)]",
-        "x_canvas_label": "log₁₀(D_amp,0 AU) [Med 4.18]",
-        "y_canvas_label": "log₁₀(Cargo AU) [Med 3.60]",
+        "x_edges": [round(float(x), 3) for x in np.linspace(2.81, 4.61, 11)],
+        "y_edges": [round(float(y), 3) for y in np.linspace(2.80, 4.28, 11)],
+        "x_label": "Absolute Carrier Wave Amplitude log₁₀(D_amp,0mM [AU]) [Global Mid = 3.71 (~5.1k AU)]",
+        "y_label": "Absolute Client Cargo Expression log₁₀(Cargo [AU]) [Global Mid = 3.54 (~3.5k AU)]",
+        "x_canvas_label": "log₁₀(D_amp,0 AU) [Mid 3.71]",
+        "y_canvas_label": "log₁₀(Cargo AU) [Mid 3.54]",
         "x_short": "log₁₀(D_amp AU)",
         "y_short": "log₁₀(Cargo AU)",
-        "x_ticks": ["3.70", "4.18", "4.66"],
-        "y_ticks": ["4.22", "3.60", "2.98"],
+        "x_ticks": ["2.81", "3.71", "4.61"],
+        "y_ticks": ["4.28", "3.54", "2.80"],
         "quad_labels": {
-            "Q1_Slow_HiLoad": "Q1: Global Weak D_amp (<4.18) + Hi Cargo",
-            "Q2_Fast_HiLoad": "Q2: Global Strong D_amp (≥4.18) + Hi Cargo",
-            "Q3_Slow_LoLoad": "Q3: Global Weak D_amp (<4.18) + Lo Cargo",
-            "Q4_Fast_LoLoad": "Q4: Global Strong D_amp (≥4.18) + Lo Cargo",
+            "Q1_Slow_HiLoad": "Q1: Global Weak D_amp (<3.71) + Hi Cargo",
+            "Q2_Fast_HiLoad": "Q2: Global Strong D_amp (≥3.71) + Hi Cargo",
+            "Q3_Slow_LoLoad": "Q3: Global Weak D_amp (<3.71) + Lo Cargo",
+            "Q4_Fast_LoLoad": "Q4: Global Strong D_amp (≥3.71) + Lo Cargo",
         },
         "quad_short": {
             "Q1_Slow_HiLoad": "Q1: GlobWeakD+HiC",
@@ -225,23 +225,23 @@ PROJECTION_DEFS = {
         "is_global_abs": True,
         "short_title": "MinE vs MinD [Global log₁₀ AU]",
         "shortLabel": "3. MinDE Phase Plane [Global Shared Grid]",
-        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(MinD AU) [Med 2.98] vs log₁₀(MinE AU) [Med 4.37]",
+        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(MinD AU) [Mid 2.92] vs log₁₀(MinE AU) [Mid 4.35]",
         "name": "Global MinDE Driver Phase Plane — Absolute log₁₀(MinE AU) vs log₁₀(MinD AU)",
-        "x_edges": [round(float(x), 3) for x in np.linspace(2.98 - 0.44, 2.98 + 0.44, 11)],
-        "y_edges": [round(float(y), 3) for y in np.linspace(4.37 - 0.35, 4.37 + 0.35, 11)],
-        "x_label": "Absolute MinD Expression log₁₀(MinD [AU]) [Global Median = 2.98 (~955 AU)]",
-        "y_label": "Absolute MinE Expression log₁₀(MinE [AU]) [Global Median = 4.37 (~23.4k AU)]",
-        "x_canvas_label": "log₁₀(MinD AU) [Med 2.98]",
-        "y_canvas_label": "log₁₀(MinE AU) [Med 4.37]",
+        "x_edges": [round(float(x), 3) for x in np.linspace(2.22, 3.62, 11)],
+        "y_edges": [round(float(y), 3) for y in np.linspace(3.95, 4.75, 11)],
+        "x_label": "Absolute MinD Expression log₁₀(MinD [AU]) [Global Mid = 2.92 (~830 AU)]",
+        "y_label": "Absolute MinE Expression log₁₀(MinE [AU]) [Global Mid = 4.35 (~22.4k AU)]",
+        "x_canvas_label": "log₁₀(MinD AU) [Mid 2.92]",
+        "y_canvas_label": "log₁₀(MinE AU) [Mid 4.35]",
         "x_short": "log₁₀(MinD AU)",
         "y_short": "log₁₀(MinE AU)",
-        "x_ticks": ["2.54", "2.98", "3.42"],
-        "y_ticks": ["4.72", "4.37", "4.02"],
+        "x_ticks": ["2.22", "2.92", "3.62"],
+        "y_ticks": ["4.75", "4.35", "3.95"],
         "quad_labels": {
-            "Q1_Slow_HiLoad": "Q1: Global Lo MinD (<2.98) + Hi MinE",
-            "Q2_Fast_HiLoad": "Q2: Global Hi MinD (≥2.98) + Hi MinE",
-            "Q3_Slow_LoLoad": "Q3: Global Lo MinD (<2.98) + Lo MinE",
-            "Q4_Fast_LoLoad": "Q4: Global Hi MinD (≥2.98) + Lo MinE",
+            "Q1_Slow_HiLoad": "Q1: Global Lo MinD (<2.92) + Hi MinE",
+            "Q2_Fast_HiLoad": "Q2: Global Hi MinD (≥2.92) + Hi MinE",
+            "Q3_Slow_LoLoad": "Q3: Global Lo MinD (<2.92) + Lo MinE",
+            "Q4_Fast_LoLoad": "Q4: Global Hi MinD (≥2.92) + Lo MinE",
         },
         "quad_short": {
             "Q1_Slow_HiLoad": "Q1: GlobLoD+HiE",
@@ -255,23 +255,23 @@ PROJECTION_DEFS = {
         "is_global_abs": True,
         "short_title": "Cargo vs MinD [Global log₁₀ AU]",
         "shortLabel": "4. Static Expression [Global Shared Grid]",
-        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(MinD AU) [Med 2.98] vs log₁₀(Cargo AU) [Med 3.60]",
+        "subtitle": "Apples-to-Apples Shared Grid: log₁₀(MinD AU) [Mid 2.92] vs log₁₀(Cargo AU) [Mid 3.54]",
         "name": "Global Static Anchor vs Client Expression — Absolute log₁₀(Cargo AU) vs log₁₀(MinD AU)",
-        "x_edges": [round(float(x), 3) for x in np.linspace(2.98 - 0.44, 2.98 + 0.44, 11)],
-        "y_edges": [round(float(y), 3) for y in np.linspace(3.60 - 0.62, 3.60 + 0.62, 11)],
-        "x_label": "Absolute Static MinD Expression log₁₀(MinD [AU]) [Global Median = 2.98 (~955 AU)]",
-        "y_label": "Absolute Client Cargo Expression log₁₀(Cargo [AU]) [Global Median = 3.60 (~4k AU)]",
-        "x_canvas_label": "log₁₀(MinD AU) [Med 2.98]",
-        "y_canvas_label": "log₁₀(Cargo AU) [Med 3.60]",
+        "x_edges": [round(float(x), 3) for x in np.linspace(2.22, 3.62, 11)],
+        "y_edges": [round(float(y), 3) for y in np.linspace(2.80, 4.28, 11)],
+        "x_label": "Absolute Static MinD Expression log₁₀(MinD [AU]) [Global Mid = 2.92 (~830 AU)]",
+        "y_label": "Absolute Client Cargo Expression log₁₀(Cargo [AU]) [Global Mid = 3.54 (~3.5k AU)]",
+        "x_canvas_label": "log₁₀(MinD AU) [Mid 2.92]",
+        "y_canvas_label": "log₁₀(Cargo AU) [Mid 3.54]",
         "x_short": "log₁₀(MinD AU)",
         "y_short": "log₁₀(Cargo AU)",
-        "x_ticks": ["2.54", "2.98", "3.42"],
-        "y_ticks": ["4.22", "3.60", "2.98"],
+        "x_ticks": ["2.22", "2.92", "3.62"],
+        "y_ticks": ["4.28", "3.54", "2.80"],
         "quad_labels": {
-            "Q1_Slow_HiLoad": "Q1: Global Lo MinD (<2.98) + Hi Cargo",
-            "Q2_Fast_HiLoad": "Q2: Global Hi MinD (≥2.98) + Hi Cargo",
-            "Q3_Slow_LoLoad": "Q3: Global Lo MinD (<2.98) + Lo Cargo",
-            "Q4_Fast_LoLoad": "Q4: Global Hi MinD (≥2.98) + Lo Cargo",
+            "Q1_Slow_HiLoad": "Q1: Global Lo MinD (<2.92) + Hi Cargo",
+            "Q2_Fast_HiLoad": "Q2: Global Hi MinD (≥2.92) + Hi Cargo",
+            "Q3_Slow_LoLoad": "Q3: Global Lo MinD (<2.92) + Lo Cargo",
+            "Q4_Fast_LoLoad": "Q4: Global Hi MinD (≥2.92) + Lo Cargo",
         },
         "quad_short": {
             "Q1_Slow_HiLoad": "Q1: GlobLoD+HiC",
@@ -391,28 +391,53 @@ def prepare_construct_voxel_table(vox: pd.DataFrame, design: str, did: str) -> p
 
     is_clamped = (did == "3x3_WT_inverse")
     if is_clamped:
-        sub_0to5 = sub_d[(sub_d["dose_mM"] >= 0.19) & (sub_d["dose_mM"] <= 5.05)].dropna(subset=["F_vocoder"]).copy()
+        sub_0to5 = sub_d[
+            (sub_d["bin_D"] >= 1)
+            & (sub_d["Data_center"] >= 800.0)
+            & (sub_d["dose_mM"] <= 5.05)
+        ].copy()
         if sub_0to5.empty:
             return pd.DataFrame()
-        # Populate onset reference values per (bin_D, bin_E, bin_Data)
-        d_min = sub_0to5["dose_mM"].min()
-        ref = sub_0to5[sub_0to5["dose_mM"] <= d_min + 0.06]
-        if ref.empty:
-            ref = sub_0to5
-        f0_ref = float(ref["F_vocoder"].median())
-        d0_ref = float(ref["D_amp"].median())
-        dn0_ref = float(ref["D_norm_amp"].median())
-        da0_ref = float(ref["Data_amp"].median())
-        dan0_ref = float(ref["Data_norm_amp"].median())
 
-        sub_0to5["D_amp_0mM"] = sub_0to5["D_amp_0mM"].fillna(sub_0to5["D_amp"])
-        sub_0to5["F_vocoder_0mM"] = sub_0to5["F_vocoder_0mM"].fillna(f0_ref)
-        sub_0to5["pct_F_vocoder"] = 100.0 * (sub_0to5["F_vocoder"] - f0_ref) / max(f0_ref, 1e-6)
-        sub_0to5["fold_D_amp"] = sub_0to5["D_norm_amp"] / max(dn0_ref, 1e-6)
-        sub_0to5["fold_Data_norm_amp"] = sub_0to5["Data_norm_amp"] / max(dan0_ref, 1e-6)
-        sub_0to5["coup_norm"] = sub_0to5["Data_norm_amp"] / sub_0to5["D_norm_amp"].clip(lower=1e-9)
-        ld0_ref = float(ref["Data_norm_amp"].median() / max(dn0_ref, 1e-6))
-        sub_0to5["fold_Data_over_D_amp"] = sub_0to5["coup_norm"] / max(ld0_ref, 1e-6)
+        # Active oscillating voxel mask (count_osc >= 8 and valid F_vocoder)
+        act_mask = (sub_0to5["count_osc"] >= 8) & sub_0to5["F_vocoder"].notna()
+        fm_onset_rows = sub_0to5[act_mask & (sub_0to5["dose_mM"] >= 0.20) & (sub_0to5["F_vocoder"] >= 14.0)].sort_values("dose_mM")
+        f0_global = float(fm_onset_rows["F_vocoder"].iloc[:200].median()) if not fm_onset_rows.empty else 27.5
+        f0_by_vox = fm_onset_rows.groupby(["bin_D", "bin_E", "bin_Data"])["F_vocoder"].first()
+        vox_idx = pd.MultiIndex.from_frame(sub_0to5[["bin_D", "bin_E", "bin_Data"]])
+        sub_0to5["F_vocoder_0mM"] = f0_by_vox.reindex(vox_idx).to_numpy()
+        sub_0to5["F_vocoder_0mM"] = sub_0to5["F_vocoder_0mM"].fillna(f0_global)
+
+        dn0_ref = sub_0to5["D_norm_amp_0mM"].fillna(float(sub_0to5.loc[act_mask, "D_norm_amp"].median())).clip(lower=1e-6)
+        dan0_ref = sub_0to5["Data_norm_amp_0mM"].fillna(float(sub_0to5.loc[act_mask, "Data_norm_amp"].median())).clip(lower=1e-6)
+        ld0_ref = (dan0_ref / dn0_ref).clip(lower=1e-6)
+
+        sub_0to5["coup_norm"] = np.where(
+            act_mask,
+            sub_0to5["Data_norm_amp"] / sub_0to5["D_norm_amp"].clip(lower=1e-9),
+            np.nan,
+        )
+        sub_0to5["fold_D_amp"] = np.where(
+            act_mask,
+            sub_0to5["D_norm_amp"] / dn0_ref,
+            np.nan,
+        )
+        sub_0to5["fold_Data_norm_amp"] = np.where(
+            act_mask,
+            sub_0to5["Data_norm_amp"] / dan0_ref,
+            np.nan,
+        )
+        sub_0to5["fold_Data_over_D_amp"] = np.where(
+            act_mask,
+            sub_0to5["coup_norm"] / ld0_ref,
+            np.nan,
+        )
+        fm_valid_mask = act_mask & (sub_0to5["dose_mM"] >= 0.20) & (sub_0to5["F_vocoder"] >= 14.0)
+        sub_0to5["pct_F_vocoder"] = np.where(
+            fm_valid_mask,
+            100.0 * (sub_0to5["F_vocoder"] - sub_0to5["F_vocoder_0mM"]) / sub_0to5["F_vocoder_0mM"].clip(lower=1e-6),
+            np.nan,
+        )
     else:
         sub_d["coup_norm"] = sub_d["Data_norm_amp"] / sub_d["D_norm_amp"].clip(lower=1e-9)
         if "fold_Data_over_D_amp" not in sub_d.columns:
@@ -426,7 +451,7 @@ def prepare_construct_voxel_table(vox: pd.DataFrame, design: str, did: str) -> p
             if osc_ok.sum() >= 150:
                 sub_comm = sub_comm[osc_ok].copy()
         if "D_center" in sub_comm.columns:
-            sub_comm = sub_comm[sub_comm["D_center"] >= 450.0].copy()
+            sub_comm = sub_comm[sub_comm["D_center"] >= 180.0].copy()
 
         sub_0to5 = sub_comm[sub_comm["dose_mM"] <= 5.05].copy()
         if sub_0to5.empty:
@@ -537,7 +562,7 @@ def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_cla
     q75s = grp_obj[cols_target].quantile(0.75)
 
     q_iqr = (
-        sub_box.groupby(["qx", "qy", "dose_mM"], observed=True)[cols_target[:5]]
+        sub_box.groupby(["qx", "qy", "dose_mM"], observed=True)[cols_target]
         .agg(lambda s: float(s.quantile(0.75) - s.quantile(0.25)))
     )
 
@@ -548,9 +573,11 @@ def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_cla
     for (bx, by), bdf in combined.groupby(["bx", "by"], observed=True):
         bdf = bdf.sort_values("dose_mM")
         d_arr = bdf["dose_mM"].to_numpy()
-        if len(d_arr) < min_doses_req or not np.any(d_arr >= 1.5):
+        n_arr = bdf["n_vox"].to_numpy()
+        act_d = d_arr[n_arr >= 1]
+        if len(act_d) < min_doses_req or not np.any(act_d >= 1.5):
             continue
-        if not is_clamped and not np.any(d_arr <= 0.11):
+        if not is_clamped and not np.any(act_d <= 0.11):
             continue
 
         bx_i, by_i = int(bx), int(by)
@@ -566,7 +593,6 @@ def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_cla
 
         # Build empirical trace arrays [med, q25, q75]
         d_list = [clean_val(x, 3) for x in d_arr]
-        n_arr = bdf["n_vox"].to_numpy()
         n_list = [int(x) for x in n_arr]
         metric_traces = {}
         for col_name, out_key, dec in [
@@ -575,15 +601,20 @@ def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_cla
             ("fold_D_amp", "cr_fold", 2),
             ("fold_Data_over_D_amp", "load_fold", 2),
             ("fold_Data_norm_amp", "am_fold", 2),
+            ("osc_pct_col", "osc_pct", 1),
         ]:
             m_arr = bdf[f"{col_name}_med"].to_numpy()
             q25_arr = bdf[f"{col_name}_q25"].to_numpy().copy()
             q75_arr = bdf[f"{col_name}_q75"].to_numpy().copy()
             for idx_d in range(len(d_arr)):
-                if n_arr[idx_d] <= 1 or abs(q75_arr[idx_d] - q25_arr[idx_d]) < 1e-6:
+                if not np.isfinite(m_arr[idx_d]):
+                    continue
+                if n_arr[idx_d] <= 1 or not np.isfinite(q25_arr[idx_d]) or abs(q75_arr[idx_d] - q25_arr[idx_d]) < 1e-6:
                     try:
                         fb_iqr = float(q_iqr.loc[(qx_i, qy_i, d_arr[idx_d]), col_name])
                     except Exception:
+                        fb_iqr = 0.08 * abs(m_arr[idx_d])
+                    if not np.isfinite(fb_iqr):
                         fb_iqr = 0.08 * abs(m_arr[idx_d])
                     half_w = 0.45 * max(fb_iqr, 1e-4)
                     q25_arr[idx_d] = m_arr[idx_d] - half_w
@@ -598,13 +629,15 @@ def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_cla
         cr_5mM_fold = f_cr["y5mM"]
         cr_max_fold = (1.0 + f_cr["dy_max"]) if f_cr["dy_max"] is not None else cr_5mM_fold
         cr_5mM_pct = round(100.0 * (cr_5mM_fold - 1.0), 2) if cr_5mM_fold is not None else None
+        act_n_arr = n_arr[n_arr >= 1]
+        nvox_stat = float(np.median(act_n_arr)) if len(act_n_arr) > 0 else 1.0
 
         bins_list.append({
             "bx": bx_i,
             "by": by_i,
             "x": clean_val(x_centers[bx_i], 3),
             "y": clean_val(y_centers[by_i], 3),
-            "nvox": clean_val(float(np.median(n_arr)), 1),
+            "nvox": clean_val(nvox_stat, 1),
             "F0_mHz": clean_val(float(bdf["f0_med"].median()), 2),
             # 1. Coupling C(c)
             "coup_y0": None if is_clamped else clean_val(f_coup["y0"], 3),
@@ -658,9 +691,9 @@ def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_cla
     q_px_dict = {}
     q_grp_obj = sub_box.groupby(["quadrant", "dose_mM"], observed=True)
     q_counts = q_grp_obj["coup_norm"].count().rename("n_voxels")
-    q_meds = q_grp_obj[cols_target[:5]].median()
-    q_q25s = q_grp_obj[cols_target[:5]].quantile(0.25)
-    q_q75s = q_grp_obj[cols_target[:5]].quantile(0.75)
+    q_meds = q_grp_obj[cols_target].median()
+    q_q25s = q_grp_obj[cols_target].quantile(0.25)
+    q_q75s = q_grp_obj[cols_target].quantile(0.75)
     q_comb = pd.concat([q_counts, q_meds.add_suffix("_med"), q_q25s.add_suffix("_q25"), q_q75s.add_suffix("_q75")], axis=1).reset_index()
 
     for qn in ["Q1_Slow_HiLoad", "Q2_Fast_HiLoad", "Q3_Slow_LoLoad", "Q4_Fast_LoLoad"]:
@@ -701,6 +734,12 @@ def compute_projection_from_voxels(sub_0to5: pd.DataFrame, proj_key: str, is_cla
                     "q25": [clean_val(x, 3) for x in qdf["fold_Data_norm_amp_q25"]],
                     "q75": [clean_val(x, 3) for x in qdf["fold_Data_norm_amp_q75"]],
                     "fit": fit_generic_hill_0to5mM(d_arr, qdf["fold_Data_norm_amp_med"].to_numpy(), signed=False),
+                },
+                "cell_territory_pct": {
+                    "med": [clean_val(x, 2) for x in qdf["osc_pct_col_med"]],
+                    "q25": [clean_val(x, 2) for x in qdf["osc_pct_col_q25"]],
+                    "q75": [clean_val(x, 2) for x in qdf["osc_pct_col_q75"]],
+                    "fit": fit_generic_hill_0to5mM(d_arr, qdf["osc_pct_col_med"].to_numpy(), signed=True),
                 },
             },
         }
@@ -983,11 +1022,13 @@ def build_bundle() -> None:
         folder_name = cmeta["folder_name"]
         is_clamped = cmeta["is_clamped_0mM"]
 
-        vox_pq = runs_root / folder_name / "titration_3d_voxels_matched.parquet"
+        unclipped_pq = runs_root / folder_name / "3x3_WT_inverse_unclipped_3d_voxels.parquet"
+        vox_pq = unclipped_pq if (is_clamped and unclipped_pq.exists()) else (runs_root / folder_name / "titration_3d_voxels_matched.parquet")
+        cache_key = str(vox_pq)
         if vox_pq.exists():
-            if folder_name not in vox_cache:
-                vox_cache[folder_name] = pd.read_parquet(vox_pq)
-            sub_0to5 = prepare_construct_voxel_table(vox_cache[folder_name], design, did)
+            if cache_key not in vox_cache:
+                vox_cache[cache_key] = pd.read_parquet(vox_pq)
+            sub_0to5 = prepare_construct_voxel_table(vox_cache[cache_key], design, did)
         else:
             sub_0to5 = pd.DataFrame()
 

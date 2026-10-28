@@ -48,9 +48,10 @@
   window.extractBinHillParams = function(binObj, metricKey) {
     if (!binObj) return null;
     if (metricKey === "coupling") {
-      if (binObj.coup_y0 === null || binObj.coup_5mM === null) return null;
-      const y0 = binObj.coup_y0;
+      if (binObj.coup_5mM === null || binObj.coup_5mM === undefined) return null;
       const y5 = binObj.coup_5mM;
+      const dyFallback = (binObj.coup_dy !== null && binObj.coup_dy !== undefined) ? binObj.coup_dy : 0.0;
+      const y0 = (binObj.coup_y0 !== null && binObj.coup_y0 !== undefined) ? binObj.coup_y0 : Math.max(0.0, y5 - dyFallback);
       const dyMax = (binObj.coup_dy_max !== null && binObj.coup_dy_max !== undefined) ? binObj.coup_dy_max : (y5 - y0);
       return { y0, dyMax, y5mM: y5, dy: y5 - y0, ec50: binObj.coup_ec50 || 0.35, nhill: binObj.coup_nhill || 1.4, r2: binObj.coup_r2 || 0.0 };
     } else if (metricKey === "fm_pct") {
@@ -114,6 +115,8 @@
       return { doses, nvox, med: tr.load_fold[0], q25: tr.load_fold[1], q75: tr.load_fold[2] };
     } else if (metricKey === "cargo_am_fold" && tr.am_fold) {
       return { doses, nvox, med: tr.am_fold[0], q25: tr.am_fold[1], q75: tr.am_fold[2] };
+    } else if (metricKey === "cell_territory_pct" && tr.osc_pct) {
+      return { doses, nvox, med: tr.osc_pct[0], q25: tr.osc_pct[1], q75: tr.osc_pct[2] };
     }
     return null;
   };
@@ -680,20 +683,24 @@
     const coupFit = window.extractBinHillParams(binObj, "coupling");
     const fmFit = window.extractBinHillParams(binObj, "fm_pct");
     const crFit = window.extractBinHillParams(binObj, "carrier_fold");
+    const oscFit = isClamped ? window.extractBinHillParams(binObj, "cell_territory_pct") : null;
 
     const coupTr = window.extractBinEmpiricalTrace(binObj, "coupling");
     const fmTr = window.extractBinEmpiricalTrace(binObj, "fm_pct");
     const crTr = window.extractBinEmpiricalTrace(binObj, "carrier_pct");
+    const oscTr = isClamped ? window.extractBinEmpiricalTrace(binObj, "cell_territory_pct") : null;
 
     // Baseline C0 for Coupling (so C0 on the Left Axis sits at the exact same yZero as 0.0% on the Right Axis!)
+    const firstCoupEmp = (coupTr && coupTr.med) ? coupTr.med.find(v => v !== null && Number.isFinite(v)) : null;
     const c0Base = (coupFit && coupFit.y0 !== null && Number.isFinite(coupFit.y0))
       ? coupFit.y0
-      : ((coupTr && coupTr.med && Number.isFinite(coupTr.med[0])) ? coupTr.med[0] : 0.15);
+      : (Number.isFinite(firstCoupEmp) ? firstCoupEmp : 0.15);
 
-    // Align empirical traces so their 0 mM point sits on the shared baseline (preserving full dose-response excursion & IQR width)
+    // Align empirical traces so their first active point sits on the shared baseline (preserving full dose-response excursion & IQR width)
     const alignTraceToOrigin = (tr, targetY0) => {
       if (!tr || !tr.doses || !tr.med || tr.med.length === 0) return null;
-      const emp0 = Number.isFinite(tr.med[0]) ? tr.med[0] : targetY0;
+      const firstVal = tr.med.find(v => v !== null && Number.isFinite(v));
+      const emp0 = Number.isFinite(firstVal) ? firstVal : targetY0;
       const shift = targetY0 - emp0;
       return {
         doses: tr.doses,
@@ -706,6 +713,7 @@
     const coupTrAligned = alignTraceToOrigin(coupTr, c0Base);
     const fmTrAligned = alignTraceToOrigin(fmTr, 0.0);
     const crTrAligned = alignTraceToOrigin(crTr, 0.0);
+    const oscTrAligned = oscTr ? alignTraceToOrigin(oscTr, 0.0) : null;
 
     // Compute maximum excursions above and below the shared origin (C0 on Left Axis, 0.0% on Right Axis)
     let leftUp = 0.45;
@@ -750,6 +758,14 @@
       crTrAligned.med.forEach(checkRight);
       crTrAligned.q25.forEach(checkRight);
       crTrAligned.q75.forEach(checkRight);
+    }
+    if (oscFit) {
+      checkRight(oscFit.dy);
+    }
+    if (oscTrAligned) {
+      oscTrAligned.med.forEach(checkRight);
+      oscTrAligned.q25.forEach(checkRight);
+      oscTrAligned.q75.forEach(checkRight);
     }
 
     // Add 12% headroom so no marker or error bar cap ever touches the border
@@ -893,6 +909,10 @@
       }
     };
 
+    // 0. If 0mM-clamped (3x3 WT Inverse), also draw Wave Awakening ΔOsc(c)% on Right Axis (Teal #2dd4bf)
+    if (isClamped && (oscFit || oscTrAligned)) {
+      drawCoDosingSeries(oscFit, oscTrAligned, yRightToPx, "#2dd4bf", "rgba(45, 212, 191, 0.13)", "diamond", [2, 2], false, 0.0);
+    }
     // 1. Carrier Amp Shift ΔD(c)% on Right Axis (Purple #c084fc)
     drawCoDosingSeries(crFit, crTrAligned, yRightToPx, "#c084fc", "rgba(192, 132, 252, 0.11)", "square", [4, 3], true, 1.0);
     // 2. Frequency Shift ΔF(c)% on Right Axis (Amber #fbbf24)
@@ -923,15 +943,19 @@
     const fmStr = (fmFit && Number.isFinite(fmFit.y5mM)) ? `${fmFit.y5mM >= 0 ? "+" : ""}${fmFit.y5mM.toFixed(1)}%` : "—";
     const crPct5 = (crFit && Number.isFinite(crFit.y5mM)) ? 100.0 * (crFit.y5mM - 1.0) : null;
     const crStr = crPct5 !== null ? `${crPct5 >= 0 ? "+" : ""}${crPct5.toFixed(1)}%` : "—";
+    const oscStr = (oscFit && Number.isFinite(oscFit.dy)) ? `${oscFit.dy >= 0 ? "+" : ""}${oscFit.dy.toFixed(1)}%` : "—";
 
     const legLines = [
       { col: "#38bdf8", text: `● Coupling C(c): ${c5Str} [L]` },
       { col: "#fbbf24", text: `▲ Freq Shift ΔF: ${fmStr} [R]` },
       { col: "#c084fc", text: `■ Carrier ΔD_amp: ${crStr} [R]` }
     ];
+    if (isClamped && (oscFit || oscTrAligned)) {
+      legLines.push({ col: "#2dd4bf", text: `◆ Awakening ΔOsc: ${oscStr} [R]` });
+    }
     ctx.font = "700 8.0px 'JetBrains Mono', Consolas, monospace";
     const legW = Math.max(...legLines.map(l => ctx.measureText(l.text).width)) + 10;
-    const legH = 36;
+    const legH = legLines.length * 10.5 + 4.5;
     ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
     ctx.fillRect(padL + 4, padT + 4, legW, legH);
     ctx.strokeStyle = "#3b4c73";

@@ -130,7 +130,15 @@
 
       if (metricSpec.isBasalC0) {
         const c0 = b.coup_y0;
-        gridR2[iy][ix] = (c0 !== null && c0 !== undefined) ? (c0 >= 0.18 ? 0.95 : 0.35) : null;
+        if (c0 !== null && c0 !== undefined) {
+          gridR2[iy][ix] = c0 >= 0.18 ? 0.95 : 0.35;
+        } else if (construct.is_clamped_0mM) {
+          // Show populated awakening footprint at C0 ≈ 0.02 (arrested baseline) instead of hiding bins
+          gridVal[iy][ix] = 0.02;
+          gridR2[iy][ix] = 0.85;
+        } else {
+          gridR2[iy][ix] = null;
+        }
       } else if (metricSpec.isEc50 && metricSpec.gain_key) {
         const gainVal = b[metricSpec.gain_key] || 0.0;
         const rawR2 = b[metricSpec.r2_key] || 0.0;
