@@ -283,10 +283,14 @@ PROJECTION_DEFS = {
 }
 
 # Precomputed vectorized Hill basis grid over (EC50 in [0.03, 4.8] mM, n_H in [0.40, 4.5])
+# Exclude steep step-function ("hockey-stick") combinations (n_H > 1.8 at EC50 > 2.0 mM) inside the 2..5 mM gap
 EC_GRID = np.geomspace(0.03, 4.8, 40)[:, None]
 NH_GRID = np.linspace(0.40, 4.5, 16)[None, :]
-EC_FLAT = np.broadcast_to(EC_GRID, (40, 16)).ravel()
-NH_FLAT = np.broadcast_to(NH_GRID, (40, 16)).ravel()
+_EC_ALL = np.broadcast_to(EC_GRID, (40, 16)).ravel()
+_NH_ALL = np.broadcast_to(NH_GRID, (40, 16)).ravel()
+_VALID_HILL_MASK = (_EC_ALL <= 2.0) | (_NH_ALL <= 1.8)
+EC_FLAT = _EC_ALL[_VALID_HILL_MASK]
+NH_FLAT = _NH_ALL[_VALID_HILL_MASK]
 H_BASIS_CACHE: dict[tuple[float, ...], np.ndarray] = {}
 
 
@@ -402,8 +406,21 @@ def prepare_construct_voxel_table(vox: pd.DataFrame, design: str, did: str) -> p
     if sub_0to5.empty:
         return pd.DataFrame()
 
+    # Reject sub-wave slow drift remnants in quenched voxels (e.g. 5-6 mHz FFT-floor bleach/focal drift)
+    # while preserving all genuine FM-braked slow MinDE waves (F >= 7.0 mHz with coherent D_z / osc_fraction)
+    drift_mask = (sub_0to5["F_vocoder"] < 7.0) | (
+        (sub_0to5["F_vocoder"] < 9.5)
+        & (sub_0to5["osc_fraction"] < 0.025)
+        & (sub_0to5["D_z"] < 5.85)
+    )
+
     # Active oscillating voxel mask at each (voxel, dose_mM)
-    act_mask = (sub_0to5["count_osc"] >= 8) & sub_0to5["D_norm_amp"].notna() & sub_0to5["Data_norm_amp"].notna()
+    act_mask = (
+        (sub_0to5["count_osc"] >= 8)
+        & (~drift_mask)
+        & sub_0to5["D_norm_amp"].notna()
+        & sub_0to5["Data_norm_amp"].notna()
+    )
 
     dn0_ref = sub_0to5["D_norm_amp_0mM"].clip(lower=1e-6)
     dan0_ref = sub_0to5["Data_norm_amp_0mM"].clip(lower=1e-6)
